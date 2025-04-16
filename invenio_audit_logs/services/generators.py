@@ -9,6 +9,7 @@
 
 from flask import g
 from flask_principal import UserNeed
+from invenio_access.permissions import system_user_id
 from invenio_records_permissions.generators import Generator
 
 
@@ -18,5 +19,6 @@ class CurrentUser(Generator):
 
     def needs(self, user_identity, **kwargs):
         """Check if the user identity matches the identity in the request."""
-        if g.identity.id == user_identity.id:
+        if user_identity.id in [g.identity.id, system_user_id]:
             return [UserNeed(user_identity.id)]
+        return []

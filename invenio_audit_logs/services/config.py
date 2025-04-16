@@ -36,7 +36,7 @@ class AuditLogSearchOptions(SearchOptionsBase):
     """Audit log search options."""
 
     sort_default = "newest"
-    sort_default_no_query = "bestmatch"
+    sort_default_no_query = "newest"
 
     sort_direction_default = "asc"
     sort_direction_options = {

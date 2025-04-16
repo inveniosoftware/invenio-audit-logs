@@ -8,7 +8,7 @@
 
 """Audit Logs Service API."""
 
-from flask import current_app, request
+from flask import request
 from invenio_accounts.proxies import current_datastore
 from invenio_records_resources.services.records import RecordService
 from invenio_records_resources.services.uow import unit_of_work
@@ -24,8 +24,8 @@ class AuditLogService(RecordService):
         """Return user context."""
         return {
             "user_account": current_datastore.get_user(identity.id),
-            "ip_address": request.headers.get("REMOTE_ADDR", request.remote_addr),
-            "session": request.cookies.get("SESSION", request.cookies["session"]),
+            "ip_address": request.headers.get("REMOTE_ADDR") or request.remote_addr,
+            "session": request.cookies.get("SESSION") or request.cookies.get("session"),
         }
 
     @unit_of_work()

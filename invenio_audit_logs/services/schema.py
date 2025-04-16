@@ -99,18 +99,22 @@ class AuditLogSchema(Schema):
         """Manipulate fields before DB insert."""
         if "metadata" in self.context:
             metadata = self.context.pop("metadata")
-            user = metadata.pop("user_account", None)
-            json["user_id"] = user.id
-            json["user"] = {
-                "name": user.username,
-                "email": user.email,
-            }
+            user = metadata.pop("user_account")
+            if user:
+                json["user_id"] = user.id
+                json["user"] = {}
+                if user.username:
+                    json["user"]["name"] = user.username
+                if user.email:
+                    json["user"]["email"] = user.email
+            else:
+                json["user_id"] = 0  # for system_identity
             json["metadata"] = metadata
         data = {
             "created": datetime.now().isoformat(),
-            "action": json.pop("action", None),
-            "user_id": json.pop("user_id", None),
-            "resource_type": json.pop("resource_type", None),
+            "action": json.pop("action"),
+            "user_id": json.pop("user_id"),
+            "resource_type": json.pop("resource_type"),
             "json": json.copy(),
         }
         return data
@@ -122,10 +126,9 @@ class AuditLogSchema(Schema):
         if isinstance(timestamp, str):
             obj["@timestamp"] = datetime.fromisoformat(timestamp)
         obj["json"] = {
-            "status": getattr(obj, "status", None),
+            "user": obj.user,
+            "resource_id": obj.resource_id,
             "message": getattr(obj, "message", None),
-            "user": getattr(obj, "user", {}),
-            "resource_id": getattr(obj, "resource_id", None),
             "metadata": getattr(obj, "metadata", {}),
         }
         return obj
