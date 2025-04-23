@@ -23,6 +23,7 @@ class AuditLogItem(RecordItem):
         errors=None,
         links_tpl=None,
         schema=None,
+        action_factory=None,
     ):
         """Constructor."""
         self._data = None
@@ -32,6 +33,7 @@ class AuditLogItem(RecordItem):
         self._service = service
         self._links_tpl = links_tpl
         self._schema = schema or service.schema
+        self._action_factory = action_factory
 
     @property
     def id(self):
@@ -54,6 +56,8 @@ class AuditLogItem(RecordItem):
 
         if self._links_tpl:
             self._data["links"] = self.links
+        if self._action_factory:
+            self._data["message"] = self._action_factory.render_message(self._data)
 
         return self._data
 

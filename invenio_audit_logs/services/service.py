@@ -15,6 +15,7 @@ from invenio_records_resources.services.uow import unit_of_work
 from invenio_search.engine import dsl
 
 from .uow import AuditLogOp
+from ..proxies import current_audit_logs_actions_registry
 
 
 class AuditLogService(RecordService):
@@ -38,7 +39,7 @@ class AuditLogService(RecordService):
         """
         self.require_permission(identity, "create", user_identity=identity)
 
-        # Validate data and create record with id
+        # Validate data, action, resource_type and create record with id
         data, errors = self.schema.load(
             data,
             context={
@@ -47,14 +48,13 @@ class AuditLogService(RecordService):
             },  # The user data is populated via context
             raise_errors=raise_errors,
         )
-
         log = self.record_cls.create(
             {},
             **data,
         )
 
         # Inject the json field into the record
-        log.update(data.get("json", {}))
+        log.update(data["json"])
 
         # Persist record (DB and index)
         uow.register(AuditLogOp(log, self.indexer))
@@ -85,4 +85,5 @@ class AuditLogService(RecordService):
             identity,
             log,
             links_tpl=self.links_item_tpl,
+            action_factory=current_audit_logs_actions_registry[log["resource_type"]][log["action"]],
         )

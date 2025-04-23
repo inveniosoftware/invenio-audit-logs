@@ -82,7 +82,6 @@ def idvar(log, vars):
     """Add domain into link vars."""
     vars["id"] = log.id
 
-
 class AuditLogServiceConfig(ServiceConfig, ConfiguratorMixin):
     """Audit log service configuration."""
 

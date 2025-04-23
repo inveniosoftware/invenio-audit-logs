@@ -7,6 +7,8 @@
 
 """Module providing audit logging features for Invenio.."""
 
+from importlib_metadata import entry_points
+
 from . import config
 from .resources import AuditLogResource, AuditLogResourceConfig
 from .services import AuditLogService, AuditLogServiceConfig
@@ -25,6 +27,7 @@ class InvenioAuditLogs(object):
         self.init_config(app)
         self.init_services(app)
         self.init_resources(app)
+        self.load_actions_registry()
         app.extensions["invenio-audit-logs"] = self
 
     def init_config(self, app):
@@ -45,3 +48,12 @@ class InvenioAuditLogs(object):
             service=self.audit_log_service,
             config=AuditLogResourceConfig.build(app),
         )
+
+    def load_actions_registry(self):
+        self.actions_registry = {}
+        for ep in entry_points(group="invenio_audit_logs.actions"):
+            resource_type = ep.name
+            resource_actions = ep.load()
+            self.actions_registry.setdefault(resource_type, {})
+            for action_name, action_factory in resource_actions().items():
+                self.actions_registry[resource_type][action_name] = action_factory
