@@ -27,18 +27,18 @@ def test_alembic(base_app, database):
     assert "audit_logs_metadata" in tables
 
     # Check that Alembic agrees that there's no further tables to create.
-    assert len(ext.alembic.compare_metadata()) == 0
+    assert list(ext.alembic.compare_metadata()) == []
 
     # Drop everything and recreate tables all with Alembic
     db.drop_all()
     drop_alembic_version_table()
     ext.alembic.upgrade()
-    assert len(ext.alembic.compare_metadata()) == 0
+    assert list(ext.alembic.compare_metadata()) == []
 
     # Try to upgrade and downgrade
     ext.alembic.stamp()
     ext.alembic.downgrade(target="96e796392533")
     ext.alembic.upgrade()
-    assert len(ext.alembic.compare_metadata()) == 0
+    assert list(ext.alembic.compare_metadata()) == []
 
     drop_alembic_version_table()

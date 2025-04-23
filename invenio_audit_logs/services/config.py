@@ -26,7 +26,7 @@ from invenio_records_resources.services.records.params import (
 from invenio_records_resources.services.records.queryparser import QueryParser
 from sqlalchemy import asc, desc
 
-from ..records import AuditLogEvent
+from ..records import AuditLog
 from . import results
 from .permissions import AuditLogPermissionPolicy
 from .schema import AuditLogSchema
@@ -46,7 +46,7 @@ class AuditLogSearchOptions(SearchOptionsBase):
 
     query_parser_cls = QueryParser.factory(
         fields=[
-            "log_id",
+            "id",
             "action",
             "user.id",
             "user.email",
@@ -80,7 +80,7 @@ class AuditLogSearchOptions(SearchOptionsBase):
 
 def idvar(log, vars):
     """Add domain into link vars."""
-    vars["id"] = log["log_id"]
+    vars["id"] = log.uuid
 
 
 class AuditLogServiceConfig(ServiceConfig, ConfiguratorMixin):
@@ -94,7 +94,7 @@ class AuditLogServiceConfig(ServiceConfig, ConfiguratorMixin):
     search = AuditLogSearchOptions
     schema = AuditLogSchema
 
-    record_cls = AuditLogEvent
+    record_cls = AuditLog
     indexer_cls = RecordIndexer
     indexer_queue_name = service_id
     index_dumper = None

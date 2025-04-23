@@ -8,7 +8,6 @@
 
 """Audit logs resource config."""
 
-from flask_resources import HTTPJSONException, create_error_handler
 from invenio_records_resources.resources import (
     RecordResourceConfig,
     SearchRequestArgsSchema,
@@ -23,6 +22,7 @@ from marshmallow import fields
 class AuditLogSearchRequestArgsSchema(SearchRequestArgsSchema):
     """Search parameters for audit-logs."""
 
+    id = fields.UUID()
     resource_id = fields.String()
     resource_type = fields.String()
     user_id = fields.String()
@@ -32,7 +32,7 @@ class AuditLogSearchRequestArgsSchema(SearchRequestArgsSchema):
 #
 # Resource config
 #
-class AuditLogsResourceConfig(RecordResourceConfig, ConfiguratorMixin):
+class AuditLogResourceConfig(RecordResourceConfig, ConfiguratorMixin):
     """Audit-Logs resource configuration."""
 
     blueprint_name = "audit_logs"
@@ -44,7 +44,7 @@ class AuditLogsResourceConfig(RecordResourceConfig, ConfiguratorMixin):
     }
 
     request_view_args = {
-        "id": fields.UUID(),  # TODO: Add direct querying via other search parameters?
+        "id": fields.UUID(),
     }
 
     request_search_args = AuditLogSearchRequestArgsSchema

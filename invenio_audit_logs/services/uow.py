@@ -28,4 +28,4 @@ class AuditLogOp(Operation):
     def on_commit(self, uow):
         """Run the operation."""
         arguments = {"refresh": True} if self._index_refresh else {}
-        return self._indexer.index_to_datastream(self._record, arguments)
+        return self._indexer.create(self._record, arguments)

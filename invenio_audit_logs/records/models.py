@@ -13,14 +13,14 @@ from invenio_records.models import RecordMetadataBase
 from sqlalchemy.types import String
 
 
-class AuditLogModel(db.Model, RecordMetadataBase):
+class AuditLog(db.Model, RecordMetadataBase):
     """Model class for Audit Log."""
 
     __tablename__ = "audit_logs_metadata"
 
     encoder = None
 
-    action = db.Column(String(255), nullable=False)  # TODO: Might change to Enum
+    action = db.Column(String(255), nullable=False)
 
     resource_type = db.Column(String(255), nullable=False)
 

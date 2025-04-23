@@ -8,7 +8,7 @@
 """Module providing audit logging features for Invenio.."""
 
 from . import config
-from .resources import AuditLogsResource, AuditLogsResourceConfig
+from .resources import AuditLogResource, AuditLogResourceConfig
 from .services import AuditLogService, AuditLogServiceConfig
 
 
@@ -41,8 +41,7 @@ class InvenioAuditLogs(object):
 
     def init_resources(self, app):
         """Init resources."""
-        self.audit_log_resource = AuditLogsResource(
+        self.audit_log_resource = AuditLogResource(
             service=self.audit_log_service,
-            config=AuditLogsResourceConfig.build(app),
+            config=AuditLogResourceConfig.build(app),
         )
-        app.register_blueprint(self.audit_log_resource.as_blueprint())

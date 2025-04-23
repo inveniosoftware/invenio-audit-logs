@@ -88,7 +88,7 @@ class AuditLogService(RecordService):
             extra_filter=extra_filter,
             versioning=True,
         )
-        search = search.query(dsl.Q("term", **{"log_id": id_}))
+        search = search.query(dsl.Q("term", **{"uuid": id_}))
         log = search.execute()[0]
 
         # Return the result

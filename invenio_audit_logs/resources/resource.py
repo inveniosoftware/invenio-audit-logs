@@ -9,8 +9,9 @@
 """Logs resource."""
 
 from flask import g
-from flask_resources import Resource, resource_requestctx, response_handler, route
+from flask_resources import resource_requestctx, response_handler, route
 from invenio_records_resources.resources.records.resource import (
+    RecordResource,
     request_extra_args,
     request_search_args,
     request_view_args,
@@ -21,20 +22,11 @@ from invenio_records_resources.resources.records.utils import search_preference
 #
 # Resource
 #
-class AuditLogsResource(Resource):
+class AuditLogResource(RecordResource):
     """Resource layer for audit-logs."""
-
-    def __init__(self, config, service):
-        """Constructor."""
-        super(AuditLogsResource, self).__init__(config)
-        self.service = service
 
     def create_blueprint(self, **options):
         """Create the blueprint."""
-        # We avoid passing url_prefix to the blueprint because we need to
-        # install URLs under both /audit-logs and /api/audit-logs. Instead we
-        # add the prefix manually to each route (which is anyway what Flask
-        # does in the end)
         options["url_prefix"] = ""
         return super().create_blueprint(**options)
 

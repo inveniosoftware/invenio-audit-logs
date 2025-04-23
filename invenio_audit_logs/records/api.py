@@ -16,33 +16,29 @@ from invenio_records.systemfields import ModelField
 from invenio_records_resources.records.api import Record
 from invenio_records_resources.records.systemfields import IndexField
 
-from .dumpers import AuditLogJsonDumperExt
-from .models import AuditLogModel
+from . import models
 
 
-class AuditLogEvent(Record):
+class AuditLog(Record):
     """API class to represent a structured audit-log event."""
 
-    model_cls = AuditLogModel
+    model_cls = models.AuditLog
     """The model class for the log."""
 
     dumper = SearchDumper(
         model_fields={
-            "id": ("log_id", UUID),
+            "id": ("uuid", UUID),
             "created": ("@timestamp", datetime),
         },
-        extensions=[
-            AuditLogJsonDumperExt(),
-        ],
     )
-    """Search dumper with configured extensions."""
+    """Search dumper with configured dump keys."""
 
     index = IndexField("auditlog-audit-log-v1.0.0", search_alias="auditlog")
     """The search engine index to use."""
 
-    id = ModelField("id", dump_type=UUID)
+    id = ModelField("id", dump_type=UUID, dump_key="uuid")
 
-    created = ModelField("created", dump_type=datetime)
+    created = ModelField("created", dump_type=datetime, dump_key="@timestamp")
 
     action = ModelField("action", dump_type=str)
 

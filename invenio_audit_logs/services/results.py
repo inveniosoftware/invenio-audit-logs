@@ -28,7 +28,7 @@ class AuditLogItem(RecordItem):
         self._data = None
         self._errors = errors
         self._identity = identity
-        self._audit_log = audit_log
+        self._record = audit_log
         self._service = service
         self._links_tpl = links_tpl
         self._schema = schema or service.schema
@@ -37,20 +37,6 @@ class AuditLogItem(RecordItem):
     def id(self):
         """Get the result id."""
         return str(self.id)
-
-    def __getitem__(self, key):
-        """Get a key from the data."""
-        return self.data[key]
-
-    @property
-    def links(self):
-        """Get links for this result item."""
-        return self._links_tpl.expand(self._identity, self._audit_log)
-
-    @property
-    def _obj(self):
-        """Return the object to dump."""
-        return self._audit_log
 
     @property
     def data(self):
@@ -62,7 +48,7 @@ class AuditLogItem(RecordItem):
             self._obj,
             context={
                 "identity": self._identity,
-                "record": self._audit_log,
+                "record": self._record,
             },
         )
 
@@ -70,18 +56,6 @@ class AuditLogItem(RecordItem):
             self._data["links"] = self.links
 
         return self._data
-
-    @property
-    def errors(self):
-        """Get the errors."""
-        return self._errors
-
-    def to_dict(self):
-        """Get a dictionary for the log."""
-        res = self.data
-        if self._errors:
-            res["errors"] = self._errors
-        return res
 
 
 class AuditLogList(RecordList):

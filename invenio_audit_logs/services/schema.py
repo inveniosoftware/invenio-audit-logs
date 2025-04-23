@@ -12,12 +12,14 @@ from datetime import datetime
 
 from marshmallow import EXCLUDE, Schema, fields, pre_dump, pre_load
 
+from invenio_access.permissions import system_identity
+
 
 class UserSchema(Schema):
     """User schema for logging."""
 
     name = fields.Str(required=False, description="User name (if available).")
-    email = fields.Email(required=False, description="User email (if available).")
+    email = fields.Email(required=True, description="User email.")
 
 
 class MetadataSchema(Schema):
@@ -69,7 +71,7 @@ class AuditLogSchema(Schema):
 
     id = fields.Str(
         description="Unique identifier of the audit log event.",
-        attribute="log_id",
+        attribute="uuid",
     )
     created = fields.DateTime(
         required=True,
@@ -95,20 +97,18 @@ class AuditLogSchema(Schema):
     )
 
     @pre_load
-    def _before_db_insert(self, json, **kwargs):
-        """Manipulate fields before DB insert."""
+    def _before_mapping(self, json, **kwargs):
+        """Remap fields before mapping to internal representation."""
         if "metadata" in self.context:
             metadata = self.context.pop("metadata")
             user = metadata.pop("user_account")
             if user:
                 json["user_id"] = user.id
-                json["user"] = {}
+                json["user"] = {"email": user.email}
                 if user.username:
                     json["user"]["name"] = user.username
-                if user.email:
-                    json["user"]["email"] = user.email
             else:
-                json["user_id"] = 0  # for system_identity
+                json["user_id"] = system_identity.id
             json["metadata"] = metadata
         data = {
             "created": datetime.now().isoformat(),

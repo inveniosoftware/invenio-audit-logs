@@ -7,10 +7,6 @@
 
 """Audit Log data layer definitions."""
 
-from .api import AuditLogEvent
-from .models import AuditLogModel
+from .api import AuditLog
 
-__all__ = (
-    "AuditLogEvent",
-    "AuditLogModel",
-)
+__all__ = ("AuditLog",)

@@ -19,15 +19,6 @@ def service(appctx):
     return current_audit_logs_service
 
 
-# def test_create(current_user, resource_data, service):
-#     """Test the create method."""
-#     result = service.create(current_user.iden, resource_data)
-
-#     assert result is not None
-#     assert result.action == "draft.create"
-#     assert result.resource_type == "record"
-
-
 def test_audit_log_create_identity_match(app, db, service, resource_data, current_user):
     """Should succeed when identity matches g.identity."""
 

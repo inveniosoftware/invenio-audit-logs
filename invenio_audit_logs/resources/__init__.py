@@ -8,10 +8,10 @@
 
 """Resources module."""
 
-from .config import AuditLogsResourceConfig
-from .resource import AuditLogsResource
+from .config import AuditLogResourceConfig
+from .resource import AuditLogResource
 
 __all__ = (
-    "AuditLogsResource",
-    "AuditLogsResourceConfig",
+    "AuditLogResource",
+    "AuditLogResourceConfig",
 )
