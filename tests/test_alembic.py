@@ -23,8 +23,7 @@ def test_alembic(base_app, database):
     base_app.config["ALEMBIC_CONTEXT"] = alembic_test_context()
 
     # Check that this package's SQLAlchemy models have been properly registered
-    tables = [x.name for x in db.metadata.tables()]
-    assert "audit_logs_metadata" in tables
+    assert "audit_logs_metadata" in db.metadata.tables
 
     # Check that Alembic agrees that there's no further tables to create.
     assert list(ext.alembic.compare_metadata()) == []

@@ -1,7 +1,6 @@
 {
   "index_patterns": ["__SEARCH_INDEX_PREFIX__auditlog*"],
   "data_stream": {},
-  "template": {
     "settings": {
       "analysis": {
         "filter": {
@@ -64,5 +63,4 @@
       "__SEARCH_INDEX_PREFIX__auditlog": {},
       "__SEARCH_INDEX_PREFIX__audit-log": {}
     }
-  }
 }

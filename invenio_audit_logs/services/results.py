@@ -36,7 +36,7 @@ class AuditLogItem(RecordItem):
     @property
     def id(self):
         """Get the result id."""
-        return str(self.id)
+        return str(self._record.id)
 
     @property
     def data(self):

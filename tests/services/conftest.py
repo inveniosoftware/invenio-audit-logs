@@ -14,21 +14,20 @@ fixtures are available.
 import pytest
 from flask_principal import Identity, UserNeed
 from invenio_access.permissions import authenticated_user
-from invenio_accounts.testutils import create_test_user
 from invenio_app.factory import create_api
-
-
-@pytest.fixture(scope="module")
-def app_config(app_config):
-    """Override pytest-invenio app_config fixture."""
-    app_config["THEME_FRONTPAGE"] = False
-    return app_config
+from invenio_search import current_search
 
 
 @pytest.fixture(scope="module")
 def create_app(instance_path):
     """Application factory fixture."""
     return create_api
+
+
+@pytest.fixture(autouse=True)
+def setup_index_templates(app):
+    """Setup index templates."""
+    list(current_search.put_index_templates())
 
 
 @pytest.fixture(scope="function")
