@@ -10,9 +10,8 @@
 
 from datetime import datetime
 
-from marshmallow import EXCLUDE, Schema, fields, pre_dump, pre_load
-
 from invenio_access.permissions import system_identity
+from marshmallow import EXCLUDE, Schema, fields, pre_dump, pre_load
 
 
 class UserSchema(Schema):
@@ -86,7 +85,7 @@ class AuditLogSchema(Schema):
         required=True,
         description="Type of resource (e.g., record, community, user).",
     )
-    user_id = fields.Int(
+    user_id = fields.Str(
         required=True,
         description="ID of the user who triggered the event.",
     )
@@ -103,7 +102,7 @@ class AuditLogSchema(Schema):
             metadata = self.context.pop("metadata")
             user = metadata.pop("user_account")
             if user:
-                json["user_id"] = user.id
+                json["user_id"] = str(user.id)
                 json["user"] = {"email": user.email}
                 if user.username:
                     json["user"]["name"] = user.username

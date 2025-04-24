@@ -11,6 +11,7 @@ from flask import Blueprint
 
 blueprint = Blueprint("invenio_audit_logs", __name__)
 
+
 def create_audit_logs_blueprint(app):
     """Create app blueprint."""
     ext = app.extensions["invenio-audit-logs"]

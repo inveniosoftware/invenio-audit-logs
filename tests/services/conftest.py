@@ -19,6 +19,13 @@ from invenio_app.factory import create_api
 
 
 @pytest.fixture(scope="module")
+def app_config(app_config):
+    """Override pytest-invenio app_config fixture."""
+    app_config["THEME_FRONTPAGE"] = False
+    return app_config
+
+
+@pytest.fixture(scope="module")
 def create_app(instance_path):
     """Application factory fixture."""
     return create_api

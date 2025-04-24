@@ -19,3 +19,17 @@ include .tx/config
 prune docs/_build
 recursive-include .github/workflows *.yml
 recursive-include invenio_audit_logs/translations *.po *.pot *.mo
+
+# added by check-manifest
+include *.md
+include *.rst
+include *.sh
+include babel.ini
+recursive-include docs *.bat
+recursive-include docs *.py
+recursive-include docs *.rst
+recursive-include docs *.txt
+recursive-include docs Makefile
+recursive-include invenio_audit_logs *.json
+recursive-include invenio_audit_logs *.py
+recursive-include tests *.py
