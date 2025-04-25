@@ -11,7 +11,14 @@
 from datetime import datetime
 
 from invenio_access.permissions import system_identity
-from marshmallow import EXCLUDE, Schema, fields, post_load, pre_dump, pre_load
+from marshmallow import (
+    EXCLUDE,
+    Schema,
+    fields,
+    post_load,
+    pre_dump,
+    pre_load,
+)
 
 
 class UserSchema(Schema):
@@ -21,8 +28,14 @@ class UserSchema(Schema):
         required=True,
         description="ID of the user who triggered the event.",
     )
-    name = fields.Str(required=False, description="User name (if available).")
-    email = fields.Email(required=True, description="User email.")
+    name = fields.Str(
+        required=False,
+        description="User name (if available).",
+    )
+    email = fields.Email(
+        required=False,
+        description="User email.",
+    )  # TODO: Make required after figuring out system user
 
 
 class ResourceSchema(Schema):
@@ -32,7 +45,10 @@ class ResourceSchema(Schema):
         required=True,
         description="Type of resource (e.g., record, community, user).",
     )
-    id = fields.Str(required=True, description="Unique identifier of the resource.")
+    id = fields.Str(
+        required=True,
+        description="Unique identifier of the resource.",
+    )
 
 
 class MetadataSchema(Schema):
@@ -112,7 +128,7 @@ class AuditLogSchema(Schema):
         return json
 
     @pre_dump
-    def _mapping_from_internal_repr(self, obj, **kwargs):
+    def _add_timestamp(self, obj, **kwargs):
         """Set json field for schema validation."""
         if getattr(obj, "model", None):  # From DB
             timestamp = obj.model.created

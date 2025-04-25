@@ -44,8 +44,10 @@ def resource_data():
     """Sample data."""
     return dict(
         action="draft.create",
-        resource_type="record",
-        resource_id="abcd-1234",
+        resource=dict(
+            type="record",
+            id="abcd-1234",
+        ),
         message=f" created the draft.",
     )
 
