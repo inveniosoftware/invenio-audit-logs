@@ -12,7 +12,7 @@ from datetime import datetime
 from uuid import UUID
 
 from invenio_records.dumpers import SearchDumper
-from invenio_records.systemfields import ModelField
+from invenio_records.systemfields import DictField, ModelField
 from invenio_records_resources.records.api import Record
 from invenio_records_resources.records.systemfields import IndexField
 
@@ -36,12 +36,16 @@ class AuditLog(Record):
     index = IndexField("auditlog-audit-log-v1.0.0", search_alias="auditlog")
     """The search engine index to use."""
 
-    id = ModelField("id", dump_type=UUID, dump_key="uuid")
+    id = ModelField("id", dump_type=UUID)
 
     created = ModelField("created", dump_type=datetime, dump_key="@timestamp")
 
     action = ModelField("action", dump_type=str)
 
+    user_id = ModelField("user_id", dump_type=str)
+
+    user = DictField("user")
+
     resource_type = ModelField("resource_type", dump_type=str)
 
-    user_id = ModelField("user_id", dump_type=str)
+    resource = DictField("resource")

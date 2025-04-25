@@ -33,7 +33,11 @@
         "uuid": { "type": "keyword" },
         "version_id": { "type": "integer" },
         "action": { "type": "keyword" },
-        "resource_type": { "type": "keyword" },
+        "resource": {
+          "properties": {
+            "id": { "type": "keyword" }
+          }
+        },
         "user_id": { "type": "keyword" },
         "message": { "type": "text" },
         "user": {
@@ -53,7 +57,7 @@
             }
           }
         },
-        "resource_id": { "type": "keyword" },
+        "resource_type": { "type": "keyword" },
         "metadata": {
           "type": "object",
           "dynamic": true
