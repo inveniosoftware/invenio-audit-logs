@@ -35,13 +35,14 @@
         "action": { "type": "keyword" },
         "resource": {
           "properties": {
-            "id": { "type": "keyword" }
+            "id": { "type": "keyword" },
+            "type": { "type": "keyword" }
           }
         },
-        "user_id": { "type": "keyword" },
         "message": { "type": "text" },
         "user": {
           "properties": {
+            "id": { "type": "keyword" },
             "name": { "type": "keyword" },
             "email": {
               "type": "text",
@@ -57,7 +58,6 @@
             }
           }
         },
-        "resource_type": { "type": "keyword" },
         "metadata": {
           "type": "object",
           "dynamic": true

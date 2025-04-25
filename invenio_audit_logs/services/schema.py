@@ -107,8 +107,8 @@ class AuditLogSchema(Schema):
     @post_load
     def _lift_up_fields(self, json, **kwargs):
         """Lift up nested fields for DB insert."""
-        json["user_id"] = json["user"].pop("id")
-        json["resource_type"] = json["resource"].pop("type")
+        json["user_id"] = json["user"].get("id")
+        json["resource_type"] = json["resource"].get("type")
         return json
 
     @pre_dump

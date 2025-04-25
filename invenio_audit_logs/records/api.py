@@ -42,10 +42,10 @@ class AuditLog(Record):
 
     action = ModelField("action", dump_type=str)
 
-    user_id = ModelField("user_id", dump_type=str)
+    user_id = ModelField("user_id", dump=False, dump_type=str)
 
     user = DictField("user")
 
-    resource_type = ModelField("resource_type", dump_type=str)
+    resource_type = ModelField("resource_type", dump=False, dump_type=str)
 
     resource = DictField("resource")
