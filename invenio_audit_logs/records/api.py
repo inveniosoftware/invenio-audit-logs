@@ -27,7 +27,7 @@ class AuditLog(Record):
 
     dumper = SearchDumper(
         model_fields={
-            "id": ("uuid", UUID),
+            "id": ("id", UUID),
             "created": ("@timestamp", datetime),
         },
     )

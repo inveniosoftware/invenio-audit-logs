@@ -28,6 +28,7 @@
       "dynamic": "strict",
       "numeric_detection": false,
       "properties": {
+        "id": { "type": "keyword" },
         "uuid": { "type": "keyword" },
         "version_id": { "type": "integer" },
         "action": { "type": "keyword" },

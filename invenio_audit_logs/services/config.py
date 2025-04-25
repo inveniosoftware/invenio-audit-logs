@@ -80,7 +80,7 @@ class AuditLogSearchOptions(SearchOptionsBase):
 
 def idvar(log, vars):
     """Add domain into link vars."""
-    vars["id"] = log.uuid
+    vars["id"] = log.id
 
 
 class AuditLogServiceConfig(ServiceConfig, ConfiguratorMixin):

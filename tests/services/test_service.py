@@ -38,9 +38,9 @@ def test_audit_log_create_identity_match(app, db, service, resource_data, curren
             id_=result.id,
         )
 
-        assert result["action"] == "record.create"
+        assert result["action"] == "draft.create"
         assert result["json"]["resource_id"] == "abcd-1234"
-        assert result["user"]["name"] == "User"
+        assert result["json"]["user"]["name"] == "User"
 
 
 def test_audit_log_create_identity_mismatch(
@@ -76,6 +76,6 @@ def test_audit_log_create_system_identity(app, db, service, resource_data):
             id_=result.id,
         )
 
-        assert result["action"] == "record.create"
+        assert result["action"] == "draft.create"
         assert result["json"]["resource_id"] == "abcd-1234"
         assert result["user_id"] == system_user_id

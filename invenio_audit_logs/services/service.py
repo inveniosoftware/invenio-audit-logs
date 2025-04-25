@@ -71,25 +71,13 @@ class AuditLogService(RecordService):
         self,
         identity,
         id_,
-        extra_filter=None,
-        preference=None,
         **kwargs,
     ):
         """Read a record."""
         self.require_permission(identity, "read", user_identity=identity)
 
         # Read the record
-        search = self.create_search(
-            identity=identity,
-            record_cls=self.record_cls,
-            search_opts=self.config.search,
-            permission_action="search",
-            preference=preference,
-            extra_filter=extra_filter,
-            versioning=True,
-        )
-        search = search.query(dsl.Q("term", **{"uuid": id_}))
-        log = search.execute()[0]
+        log = self.record_cls.get_record(id_=id_)
 
         # Return the result
         return self.result_item(

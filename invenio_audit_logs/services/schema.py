@@ -70,7 +70,6 @@ class AuditLogSchema(Schema):
 
     id = fields.Str(
         description="Unique identifier of the audit log event.",
-        attribute="uuid",
     )
     created = fields.DateTime(
         required=True,
@@ -96,7 +95,7 @@ class AuditLogSchema(Schema):
     )
 
     @pre_load
-    def _before_mapping(self, json, **kwargs):
+    def _mapping_to_internal_repr(self, json, **kwargs):
         """Remap fields before mapping to internal representation."""
         if "metadata" in self.context:
             metadata = self.context.pop("metadata")
@@ -119,15 +118,14 @@ class AuditLogSchema(Schema):
         return data
 
     @pre_dump
-    def _after_search_query(self, obj, **kwargs):
-        """Convert `timestamp` from ISO string to datetime if needed and set json field."""
-        timestamp = getattr(obj, "@timestamp", None)
-        if isinstance(timestamp, str):
-            obj["@timestamp"] = datetime.fromisoformat(timestamp)
-        obj["json"] = {
-            "user": obj.user,
-            "resource_id": obj.resource_id,
-            "message": getattr(obj, "message", None),
-            "metadata": getattr(obj, "metadata", {}),
-        }
+    def _mapping_from_internal_repr(self, obj, **kwargs):
+        """Set json field for schema validation."""
+        setattr(obj, "json", obj)
+        if getattr(obj, "model", None):  # From DB
+            timestamp = obj.model.created
+        elif getattr(obj, "@timestamp"):  # From Search
+            timestamp = datetime.fromisoformat(getattr(obj, "@timestamp"))
+        else:
+            return obj  # Let marshmallow's required field error handle this
+        setattr(obj, "@timestamp", timestamp)
         return obj
