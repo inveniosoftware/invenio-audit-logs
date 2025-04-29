@@ -52,8 +52,6 @@ class InvenioAuditLogs(object):
     def load_actions_registry(self):
         self.actions_registry = {}
         for ep in entry_points(group="invenio_audit_logs.actions"):
-            resource_type = ep.name
             resource_actions = ep.load()
-            self.actions_registry.setdefault(resource_type, {})
             for action_name, action_factory in resource_actions().items():
-                self.actions_registry[resource_type][action_name] = action_factory
+                self.actions_registry[action_name] = action_factory

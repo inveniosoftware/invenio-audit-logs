@@ -9,7 +9,8 @@
 
 from collections.abc import Iterable, Sized
 
-from invenio_records_resources.services.records.results import RecordItem, RecordList
+from invenio_records_resources.services.records.results import RecordItem, \
+    RecordList
 
 
 class AuditLogItem(RecordItem):
@@ -23,7 +24,6 @@ class AuditLogItem(RecordItem):
         errors=None,
         links_tpl=None,
         schema=None,
-        action_factory=None,
     ):
         """Constructor."""
         self._data = None
@@ -33,7 +33,6 @@ class AuditLogItem(RecordItem):
         self._service = service
         self._links_tpl = links_tpl
         self._schema = schema or service.schema
-        self._action_factory = action_factory
 
     @property
     def id(self):
@@ -56,8 +55,7 @@ class AuditLogItem(RecordItem):
 
         if self._links_tpl:
             self._data["links"] = self.links
-        if self._action_factory:
-            self._data["message"] = self._action_factory.render_message(self._data)
+        # TODO: Add message rendering here later
 
         return self._data
 
@@ -94,6 +92,7 @@ class AuditLogList(RecordList):
 
             if self._links_item_tpl:
                 projection["links"] = self._links_item_tpl.expand(self._identity, hit)
+            # TODO: Add message rendering here later
 
             yield projection
 

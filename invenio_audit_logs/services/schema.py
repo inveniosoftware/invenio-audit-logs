@@ -11,16 +11,7 @@
 from datetime import datetime
 
 from invenio_access.permissions import system_identity
-from marshmallow import (
-    EXCLUDE,
-    Schema,
-    fields,
-    post_load,
-    pre_dump,
-    pre_load,
-)
-
-from ..proxies import current_audit_logs_actions_registry
+from marshmallow import EXCLUDE, Schema, fields, post_load, pre_dump, pre_load
 
 
 class UserSchema(Schema):
@@ -140,21 +131,3 @@ class AuditLogSchema(Schema):
             return obj  # Let marshmallow's required field error handle this
         setattr(obj, "@timestamp", timestamp)
         return obj
-
-    @validates_schema
-    def validate_action_for_resource(self, data, **kwargs):
-        """Validates the action for a given resource type."""
-        resource_type = data["resource_type"]
-        action = data["action"]
-
-        if not resource_type or not action:
-            return
-
-        valid_actions = current_audit_logs_actions_registry.get(resource_type)
-
-        if action not in valid_actions.keys():
-            raise ValidationError(
-                {
-                    "action": f"Invalid action '{action}' for resource type '{resource_type}'."
-                }
-            )

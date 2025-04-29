@@ -15,7 +15,6 @@ from invenio_records_resources.services.uow import unit_of_work
 from invenio_search.engine import dsl
 
 from .uow import AuditLogOp
-from ..proxies import current_audit_logs_actions_registry
 
 
 class AuditLogService(RecordService):
@@ -85,5 +84,4 @@ class AuditLogService(RecordService):
             identity,
             log,
             links_tpl=self.links_item_tpl,
-            action_factory=current_audit_logs_actions_registry[log["resource_type"]][log["action"]],
         )

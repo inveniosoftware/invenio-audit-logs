@@ -16,7 +16,7 @@ from invenio_records.systemfields import DictField, ModelField
 from invenio_records_resources.records.api import Record
 from invenio_records_resources.records.systemfields import IndexField
 
-from . import models
+from . import models, systemfields
 
 
 class AuditLog(Record):
@@ -40,7 +40,7 @@ class AuditLog(Record):
 
     created = ModelField("created", dump_type=datetime, dump_key="@timestamp")
 
-    action = ModelField("action", dump_type=str)
+    action = systemfields.ActionField("action", dump_type=str)
 
     user_id = ModelField("user_id", dump=False, dump_type=str)
 
