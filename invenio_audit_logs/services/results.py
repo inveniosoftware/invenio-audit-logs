@@ -9,8 +9,7 @@
 
 from collections.abc import Iterable, Sized
 
-from invenio_records_resources.services.records.results import RecordItem, \
-    RecordList
+from invenio_records_resources.services.records.results import RecordItem, RecordList
 
 
 class AuditLogItem(RecordItem):

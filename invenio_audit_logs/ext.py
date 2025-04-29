@@ -50,6 +50,7 @@ class InvenioAuditLogs(object):
         )
 
     def load_actions_registry(self):
+        """Action loading registry."""
         self.actions_registry = {}
         for ep in entry_points(group="invenio_audit_logs.actions"):
             resource_actions = ep.load()

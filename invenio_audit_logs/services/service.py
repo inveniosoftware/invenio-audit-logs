@@ -12,7 +12,6 @@ from flask import request
 from invenio_accounts.proxies import current_datastore
 from invenio_records_resources.services.records import RecordService
 from invenio_records_resources.services.uow import unit_of_work
-from invenio_search.engine import dsl
 
 from .uow import AuditLogOp
 
@@ -51,9 +50,6 @@ class AuditLogService(RecordService):
             {},
             **data,
         )
-
-        # Inject the json field into the record
-        log.update(data["json"])
 
         # Persist record (DB and index)
         uow.register(AuditLogOp(log, self.indexer))

@@ -5,8 +5,9 @@
 # Invenio-Audit-Logs is free software; you can redistribute it and/or modify
 # it under the terms of the MIT License; see LICENSE file for more details.
 
+"""Class for Audit Action registered via entrypoints."""
+
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional
 
 
 @dataclass(frozen=True)

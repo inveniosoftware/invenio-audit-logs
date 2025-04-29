@@ -11,19 +11,23 @@ from invenio_i18n import lazy_gettext as _
 from invenio_indexer.api import RecordIndexer
 from invenio_records_resources.services import pagination_links
 from invenio_records_resources.services.base import ServiceConfig
-from invenio_records_resources.services.base.config import ConfiguratorMixin, \
-    FromConfig
+from invenio_records_resources.services.base.config import ConfiguratorMixin, FromConfig
 from invenio_records_resources.services.base.links import Link
-from invenio_records_resources.services.records.config import \
-    SearchOptions as SearchOptionsBase
+from invenio_records_resources.services.records.config import (
+    SearchOptions as SearchOptionsBase,
+)
 from invenio_records_resources.services.records.facets import TermsFacet
-from invenio_records_resources.services.records.params import FacetsParam, \
-    PaginationParam, QueryStrParam, SortParam
+from invenio_records_resources.services.records.params import (
+    FacetsParam,
+    PaginationParam,
+    QueryStrParam,
+    SortParam,
+)
 from invenio_records_resources.services.records.queryparser import QueryParser
 from sqlalchemy import asc, desc
 
-from . import results
 from ..records import AuditLog
+from . import results
 from .permissions import AuditLogPermissionPolicy
 from .schema import AuditLogSchema
 
@@ -78,6 +82,7 @@ class AuditLogSearchOptions(SearchOptionsBase):
 def idvar(log, vars):
     """Add domain into link vars."""
     vars["id"] = log.id
+
 
 class AuditLogServiceConfig(ServiceConfig, ConfiguratorMixin):
     """Audit log service configuration."""

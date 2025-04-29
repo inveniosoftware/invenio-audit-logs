@@ -7,11 +7,10 @@
 
 """Action system field for record."""
 
-import inspect
 from invenio_records.systemfields import ModelField
-from ...proxies import current_audit_logs_actions_registry
 
 from ...actions import AuditAction
+from ...proxies import current_audit_logs_actions_registry
 
 
 class ActionField(ModelField):

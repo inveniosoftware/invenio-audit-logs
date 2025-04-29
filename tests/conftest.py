@@ -26,3 +26,13 @@ def app_config(app_config):
 def create_app(instance_path):
     """Application factory fixture."""
     return _create_api
+
+
+@pytest.fixture(scope="module")
+def extra_entry_points():
+    """Register extra entry point."""
+    return {
+        "invenio_audit_logs.actions": [
+            "record = mock_module.auditlog_actions:record_actions",
+        ]
+    }
