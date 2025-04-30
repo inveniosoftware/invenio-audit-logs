@@ -10,8 +10,7 @@
 
 from datetime import datetime
 
-from invenio_access.permissions import system_identity
-from marshmallow import EXCLUDE, Schema, fields, post_load, pre_dump, pre_load
+from marshmallow import EXCLUDE, Schema, fields, post_load, pre_dump
 
 
 class UserSchema(Schema):
@@ -96,22 +95,6 @@ class AuditLogSchema(Schema):
         required=False,
         description="Additional structured metadata for logging.",
     )
-
-    @pre_load
-    def _add_user_context(self, json, **kwargs):
-        """Remap fields before mapping to internal representation."""
-        if "metadata" in self.context:
-            metadata = self.context.get("metadata")
-            user = metadata.pop("user_account")
-            if user:
-                json["user"] = {"id": str(user.id), "email": user.email}
-                if user.username:
-                    json["user"]["name"] = user.username
-            else:
-                json["user"] = {"id": system_identity.id}
-        json["metadata"] = metadata
-        json["created"] = datetime.now().isoformat()
-        return json
 
     @post_load
     def _lift_up_fields(self, json, **kwargs):

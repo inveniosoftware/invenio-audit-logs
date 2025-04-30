@@ -8,8 +8,8 @@
 
 """Audit Logs Service API."""
 
-from flask import request
-from invenio_accounts.proxies import current_datastore
+from datetime import datetime
+
 from invenio_records_resources.services.records import RecordService
 from invenio_records_resources.services.uow import unit_of_work
 
@@ -19,14 +19,6 @@ from .uow import AuditLogOp
 class AuditLogService(RecordService):
     """Audit log service layer."""
 
-    def _get_user_context(self, identity):
-        """Return user context."""
-        return {
-            "user_account": current_datastore.get_user(identity.id),
-            "ip_address": request.headers.get("REMOTE_ADDR") or request.remote_addr,
-            "session": request.cookies.get("SESSION") or request.cookies.get("session"),
-        }
-
     @unit_of_work()
     def create(self, identity, data, raise_errors=True, uow=None):
         """Create a record.
@@ -34,16 +26,22 @@ class AuditLogService(RecordService):
         :param identity: Identity of user creating the record.
         :param dict data: Input data according to the data schema.
         :param bool raise_errors: raise schema ValidationError or not.
+        :param dict uow: Unit of Work.
         """
         self.require_permission(identity, "create", user_identity=identity)
+
+        if "created" not in data:
+            data["created"] = datetime.now().isoformat()
+
+        # The user and session data is populated via component
+        self.run_components("create", identity=identity, data=data)
 
         # Validate data, action, resource_type and create record with id
         data, errors = self.schema.load(
             data,
             context={
                 "identity": identity,
-                "metadata": self._get_user_context(identity),
-            },  # The user data is populated via context
+            },
             raise_errors=raise_errors,
         )
         log = self.record_cls.create(

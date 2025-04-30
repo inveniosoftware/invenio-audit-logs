@@ -30,7 +30,7 @@ from ..records import AuditLog
 from . import results
 from .permissions import AuditLogPermissionPolicy
 from .schema import AuditLogSchema
-
+from .components import UserContextComponent
 
 class AuditLogSearchOptions(SearchOptionsBase):
     """Audit log search options."""
@@ -100,7 +100,9 @@ class AuditLogServiceConfig(ServiceConfig, ConfiguratorMixin):
     indexer_queue_name = service_id
     index_dumper = None
 
-    components = []
+    components = [
+        UserContextComponent,
+    ]
     links_item = {
         "self": Link("{+api}/audit-logs/{id}", vars=idvar),
     }
