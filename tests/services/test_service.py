@@ -22,10 +22,7 @@ def service(appctx):
 def test_audit_log_create_identity_match(app, db, service, resource_data, current_user):
     """Should succeed when identity matches g.identity."""
 
-    with app.test_request_context(
-        headers={"REMOTE_ADDR": "127.0.0.1", "Cookie": "SESSION=session-id-123"},
-        environ_base={"REMOTE_ADDR": "127.0.0.1"},
-    ):
+    with app.test_request_context():
         g.identity = current_user.identity  # Set context identity
 
         result = service.create(
@@ -49,10 +46,7 @@ def test_audit_log_create_identity_mismatch(
     app, db, service, resource_data, current_user, authenticated_identity
 ):
     """Should fail when identity != g.identity."""
-    with app.test_request_context(
-        headers={"REMOTE_ADDR": "127.0.0.1", "Cookie": "SESSION=session-id-123"},
-        environ_base={"REMOTE_ADDR": "127.0.0.1"},
-    ):
+    with app.test_request_context():
         g.identity = current_user.identity  # Set context identity
 
         with pytest.raises(PermissionDeniedError):
@@ -64,10 +58,7 @@ def test_audit_log_create_identity_mismatch(
 
 def test_audit_log_create_system_identity(app, db, service, resource_data):
     """Should succeed when identity is system."""
-    with app.test_request_context(
-        headers={"REMOTE_ADDR": "127.0.0.1", "Cookie": "session=session-id-123"},
-        environ_base={"REMOTE_ADDR": "127.0.0.1"},
-    ):
+    with app.test_request_context():
         result = service.create(
             identity=system_identity,  # System
             data=resource_data,

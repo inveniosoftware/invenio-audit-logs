@@ -19,7 +19,7 @@ from invenio_search import current_search
 
 
 @pytest.fixture(scope="module")
-def create_app(instance_path):
+def create_app(instance_path, entry_points):
     """Application factory fixture."""
     return create_api
 

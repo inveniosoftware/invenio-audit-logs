@@ -11,6 +11,4 @@
 
 from .user_context import UserContextComponent
 
-__all__ = (
-    "UserContextComponent",
-)
+__all__ = ("UserContextComponent",)

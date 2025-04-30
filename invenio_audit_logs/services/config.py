@@ -28,9 +28,10 @@ from sqlalchemy import asc, desc
 
 from ..records import AuditLog
 from . import results
+from .components import UserContextComponent
 from .permissions import AuditLogPermissionPolicy
 from .schema import AuditLogSchema
-from .components import UserContextComponent
+
 
 class AuditLogSearchOptions(SearchOptionsBase):
     """Audit log search options."""
