@@ -9,14 +9,15 @@
 
 from invenio_records_resources.services.records.facets import TermsFacet
 
+from .proxies import current_audit_logs_actions_registry
+
 AUDIT_LOGS_SEARCH = {
-    "facets": ["resource"],
+    "facets": ["resource", "user", "action_name"],
     "sort": [
         "bestmatch",
         "newest",
         "oldest",
     ],
-    # query_parser_cls
 }
 """Search configuration for audit logs."""
 
@@ -31,6 +32,24 @@ AUDIT_LOGS_FACETS = {
             },
         ),
         ui=dict(field="resource.type"),
+    ),
+    "action_name": dict(
+        facet=TermsFacet(
+            field="action",
+            label="Action",
+            value_labels=lambda keys: {
+                k: current_audit_logs_actions_registry[k].name for k in keys
+            },
+        ),
+        ui=dict(field="action"),
+    ),
+    "user": dict(
+        facet=TermsFacet(
+            field="user.id",
+            label="User",
+            value_labels=lambda ids: {id: id.upper() for id in ids},
+        ),
+        ui=dict(field="user.id"),
     ),
 }
 

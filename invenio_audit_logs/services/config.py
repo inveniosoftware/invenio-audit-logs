@@ -26,6 +26,7 @@ from invenio_records_resources.services.records.params import (
 from invenio_records_resources.services.records.queryparser import QueryParser
 from sqlalchemy import asc, desc
 
+from ..proxies import current_audit_logs_actions_registry
 from ..records import AuditLog
 from . import results
 from .components import UserContextComponent
@@ -66,7 +67,19 @@ class AuditLogSearchOptions(SearchOptionsBase):
         "resource": TermsFacet(
             field="resource.type",
             label="Resource",
-            value_labels={"record": "Record", "community": "Community"},  # TODO: Enum
+            value_labels={"record": "Record", "community": "Community"},
+        ),
+        "action_name": TermsFacet(
+            field="action",
+            label="Action",
+            value_labels=lambda keys: {
+                k: current_audit_logs_actions_registry[k].name for k in keys
+            },
+        ),
+        "user": TermsFacet(
+            field="user.id",
+            label="User",
+            value_labels=lambda ids: {id: id.upper() for id in ids},
         ),
     }
 
