@@ -19,7 +19,10 @@ class UserContextComponent(ServiceComponent):
     def create(self, identity, data=None, **kwargs):
         """Add user info."""
         if identity.id == system_identity.id:
-            data["user"] = {"id": system_identity.id}
+            data["user"] = {
+                "id": system_identity.id,
+                "email": "system@system.org",
+            }  # TODO: Remove this after confirming system user email is passed
         else:
             user = current_datastore.get_user(identity.id)
             user_blob = {"id": str(user.id), "email": user.email}

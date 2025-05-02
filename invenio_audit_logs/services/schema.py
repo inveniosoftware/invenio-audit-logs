@@ -25,9 +25,9 @@ class UserSchema(Schema):
         description="User name (if available).",
     )
     email = fields.Email(
-        required=False,
+        required=True,
         description="User email.",
-    )  # TODO: Make required after figuring out system user
+    )
 
 
 class ResourceSchema(Schema):

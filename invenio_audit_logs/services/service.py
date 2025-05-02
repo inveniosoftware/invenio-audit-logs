@@ -79,3 +79,11 @@ class AuditLogService(RecordService):
             log,
             links_tpl=self.links_item_tpl,
         )
+
+
+class DisabledAuditLogService(AuditLogService):
+    """Disabled Audit Log Service."""
+
+    def create(self, *args, **kwargs):
+        """Overridden create method."""
+        return None

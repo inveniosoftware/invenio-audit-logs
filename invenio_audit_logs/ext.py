@@ -11,7 +11,7 @@ from importlib_metadata import entry_points
 
 from . import config
 from .resources import AuditLogResource, AuditLogResourceConfig
-from .services import AuditLogService, AuditLogServiceConfig
+from .services import AuditLogService, AuditLogServiceConfig, DisabledAuditLogService
 
 
 class InvenioAuditLogs(object):
@@ -38,9 +38,15 @@ class InvenioAuditLogs(object):
 
     def init_services(self, app):
         """Initialize services."""
-        self.audit_log_service = AuditLogService(
-            config=AuditLogServiceConfig.build(app),
-        )
+        if app.config.get("AUDIT_LOGS_ENABLED", True):
+            self.audit_log_service = AuditLogService(
+                config=AuditLogServiceConfig.build(app),
+            )
+        else:
+            # Disabled audit log service with everything except create still enabled, hence the config
+            self.audit_log_service = DisabledAuditLogService(
+                config=AuditLogServiceConfig.build(app),
+            )
 
     def init_resources(self, app):
         """Init resources."""

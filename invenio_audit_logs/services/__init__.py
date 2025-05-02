@@ -9,10 +9,11 @@
 
 from .config import AuditLogServiceConfig
 from .schema import AuditLogSchema
-from .service import AuditLogService
+from .service import AuditLogService, DisabledAuditLogService
 
 __all__ = (
     "AuditLogService",
     "AuditLogSchema",
     "AuditLogServiceConfig",
+    "DisabledAuditLogService",
 )
