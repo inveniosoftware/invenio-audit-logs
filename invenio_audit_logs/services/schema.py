@@ -43,6 +43,23 @@ class MetadataSchema(Schema):
     )
 
 
+class UserSchema(Schema):
+    """User schema for logging."""
+
+    id = fields.Str(
+        required=True,
+        description="ID of the user who triggered the event.",
+    )
+    name = fields.Str(
+        required=False,
+        description="User name (if available).",
+    )
+    email = fields.Email(
+        required=True,
+        description="User email.",
+    )
+
+
 class AuditLogSchema(Schema):
     """Main schema for audit log events in InvenioRDM."""
 
@@ -72,6 +89,13 @@ class AuditLogSchema(Schema):
         MetadataSchema,
         required=False,
         description="Additional structured metadata for logging.",
+    )
+
+    user = fields.Nested(
+        UserSchema,
+        dump_only=True,
+        required=True,
+        description="Information about the user who triggered the event.",
     )
 
     @post_load

@@ -19,6 +19,7 @@ from invenio_app.factory import create_api as _create_api
 def app_config(app_config):
     """Application config override."""
     app_config["THEME_FRONTPAGE"] = False
+    app_config["AUDIT_LOGS_ENABLED"] = True
     return app_config
 
 

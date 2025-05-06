@@ -35,6 +35,7 @@ class AuditLogService(RecordService):
             return
 
         self.require_permission(identity, "create")
+
         if "created" not in data:
             data["created"] = datetime.utcnow().isoformat()
 
@@ -46,7 +47,6 @@ class AuditLogService(RecordService):
             },
             raise_errors=raise_errors,
         )
-
 
         # TODO - to be changed to entity resolver
         if identity.id == system_identity.id:
