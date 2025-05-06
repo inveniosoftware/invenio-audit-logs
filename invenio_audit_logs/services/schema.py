@@ -13,23 +13,6 @@ from datetime import datetime
 from marshmallow import EXCLUDE, Schema, fields, post_load, pre_dump
 
 
-class UserSchema(Schema):
-    """User schema for logging."""
-
-    id = fields.Str(
-        required=True,
-        description="ID of the user who triggered the event.",
-    )
-    name = fields.Str(
-        required=False,
-        description="User name (if available).",
-    )
-    email = fields.Email(
-        required=True,
-        description="User email.",
-    )
-
-
 class ResourceSchema(Schema):
     """Resource schema for logging."""
 
@@ -85,11 +68,6 @@ class AuditLogSchema(Schema):
         required=True,
         description="Type of resource (e.g., record, community, user).",
     )
-    user = fields.Nested(
-        UserSchema,
-        required=True,
-        description="Information about the user who triggered the event.",
-    )
     metadata = fields.Nested(
         MetadataSchema,
         required=False,
@@ -99,7 +77,6 @@ class AuditLogSchema(Schema):
     @post_load
     def _lift_up_fields(self, json, **kwargs):
         """Lift up nested fields for DB insert."""
-        json["user_id"] = json["user"].get("id")
         json["resource_type"] = json["resource"].get("type")
         return json
 

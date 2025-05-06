@@ -59,3 +59,6 @@ AUDIT_LOGS_SORT_OPTIONS = {
     "oldest": dict(title="Oldest", fields=["@timestamp"]),
 }
 """Sort options for audit logs."""
+
+AUDIT_LOGS_ENABLED = True
+"""Feature flag. Disabled by default due to experimental nature of the APIs. Feature is not fully stable."""

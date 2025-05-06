@@ -29,7 +29,6 @@ from sqlalchemy import asc, desc
 from ..proxies import current_audit_logs_actions_registry
 from ..records import AuditLog
 from . import results
-from .components import UserContextComponent
 from .permissions import AuditLogPermissionPolicy
 from .schema import AuditLogSchema
 
@@ -101,6 +100,7 @@ def idvar(log, vars):
 class AuditLogServiceConfig(ServiceConfig, ConfiguratorMixin):
     """Audit log service configuration."""
 
+    enabled = FromConfig("AUDIT_LOGS_ENABLED", default=True)
     service_id = "audit-logs"
     permission_policy_cls = FromConfig(
         "AUDIT_LOGS_PERMISSION_POLICY",
@@ -114,9 +114,7 @@ class AuditLogServiceConfig(ServiceConfig, ConfiguratorMixin):
     indexer_queue_name = service_id
     index_dumper = None
 
-    components = [
-        UserContextComponent,
-    ]
+    components = []
     links_item = {
         "self": Link("{+api}/audit-logs/{id}", vars=idvar),
     }

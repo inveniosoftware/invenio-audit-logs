@@ -38,15 +38,9 @@ class InvenioAuditLogs(object):
 
     def init_services(self, app):
         """Initialize services."""
-        if app.config.get("AUDIT_LOGS_ENABLED", True):
-            self.audit_log_service = AuditLogService(
-                config=AuditLogServiceConfig.build(app),
-            )
-        else:
-            # Disabled audit log service with everything except create still enabled, hence the config
-            self.audit_log_service = DisabledAuditLogService(
-                config=AuditLogServiceConfig.build(app),
-            )
+        self.audit_log_service = AuditLogService(
+            config=AuditLogServiceConfig.build(app),
+        )
 
     def init_resources(self, app):
         """Init resources."""

@@ -10,10 +10,12 @@
 
 from datetime import datetime
 
+from invenio_access.permissions import system_identity
+from invenio_accounts.proxies import current_datastore
 from invenio_records_resources.services.records import RecordService
 from invenio_records_resources.services.uow import unit_of_work
 
-from .uow import AuditLogOp
+from .uow import AuditRecordCommitOp
 
 
 class AuditLogService(RecordService):
@@ -28,13 +30,13 @@ class AuditLogService(RecordService):
         :param bool raise_errors: raise schema ValidationError or not.
         :param dict uow: Unit of Work.
         """
-        self.require_permission(identity, "create", user_identity=identity)
+        if not self.config.enabled:
+            # don't create log if feature disabled
+            return
 
+        self.require_permission(identity, "create")
         if "created" not in data:
-            data["created"] = datetime.now().isoformat()
-
-        # The user and session data is populated via component
-        self.run_components("create", identity=identity, data=data)
+            data["created"] = datetime.utcnow().isoformat()
 
         # Validate data, action, resource_type and create record with id
         data, errors = self.schema.load(
@@ -44,18 +46,37 @@ class AuditLogService(RecordService):
             },
             raise_errors=raise_errors,
         )
-        log = self.record_cls.create(
+
+
+        # TODO - to be changed to entity resolver
+        if identity.id == system_identity.id:
+            data["user"] = {
+                "id": system_identity.id,
+                "email": "system@system.org",
+            }  # TODO: Remove this after confirming system user email is passed
+            data["user_id"] = system_identity.id
+        else:
+            user = current_datastore.get_user(identity.id)
+            user_blob = {"id": str(user.id), "email": user.email}
+            if user.username:
+                user_blob["name"] = user.username
+            data["user"] = user_blob
+            data["user_id"] = user.id
+
+        record = self.record_cls.create(
             {},
             **data,
         )
 
+        # The user and session data is populated via component
+        self.run_components("create", identity=identity, record=record)
         # Persist record (DB and index)
-        uow.register(AuditLogOp(log, self.indexer))
+        uow.register(AuditRecordCommitOp(record, self.indexer))
 
         return self.result_item(
             self,
             identity,
-            log,
+            record,
             links_tpl=self.links_item_tpl,
             errors=errors,
         )
