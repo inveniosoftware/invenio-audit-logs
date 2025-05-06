@@ -60,5 +60,5 @@ AUDIT_LOGS_SORT_OPTIONS = {
 }
 """Sort options for audit logs."""
 
-AUDIT_LOGS_ENABLED = True
+AUDIT_LOGS_ENABLED = False
 """Feature flag. Disabled by default due to experimental nature of the APIs. Feature is not fully stable."""
