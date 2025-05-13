@@ -2,6 +2,7 @@
 #
 # This file is part of Invenio.
 # Copyright (C) 2025 CERN.
+# Copyright (C) 2025 Graz University of Technology.
 #
 # Invenio-Audit-Logs is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see LICENSE file for more details.
@@ -18,11 +19,15 @@ class ResourceSchema(Schema):
 
     type = fields.Str(
         required=True,
-        description="Type of resource (e.g., record, community, user).",
+        metadata={
+            "description": "Type of resource (e.g., record, community, user).",
+        },
     )
     id = fields.Str(
         required=True,
-        description="Unique identifier of the resource.",
+        metadata={
+            "description": "Unique identifier of the resource.",
+        },
     )
 
 
@@ -31,15 +36,21 @@ class MetadataSchema(Schema):
 
     ip_address = fields.Str(
         required=False,
-        description="IP address of the client.",
+        metadata={
+            "description": "IP address of the client.",
+        },
     )
     session = fields.Str(
         required=False,
-        description="Session identifier.",
+        metadata={
+            "description": "Session identifier.",
+        },
     )
     request_id = fields.Str(
         required=False,
-        description="Unique identifier for the request.",
+        metadata={
+            "description": "Unique identifier for the request.",
+        },
     )
 
 
@@ -48,15 +59,21 @@ class UserSchema(Schema):
 
     id = fields.Str(
         required=True,
-        description="ID of the user who triggered the event.",
+        metadata={
+            "description": "ID of the user who triggered the event.",
+        },
     )
     name = fields.Str(
         required=False,
-        description="User name (if available).",
+        metadata={
+            "description": "User name (if available).",
+        },
     )
     email = fields.Email(
         required=True,
-        description="User email.",
+        metadata={
+            "description": "User email.",
+        },
     )
 
 
@@ -69,33 +86,45 @@ class AuditLogSchema(Schema):
         unknown = EXCLUDE  # Ignore unknown fields
 
     id = fields.Str(
-        description="Unique identifier of the audit log event.",
+        metadata={
+            "description": "Unique identifier of the audit log event.",
+        }
     )
     created = fields.DateTime(
         required=True,
-        description="Timestamp when the event occurred.",
+        metadata={
+            "description": "Timestamp when the event occurred.",
+        },
         attribute="@timestamp",
     )
     action = fields.Str(
         required=True,
-        description="The action that took place (e.g., record.create, community.update).",
+        metadata={
+            "description": "The action that took place (e.g., record.create, community.update).",
+        },
     )
     resource = fields.Nested(
         ResourceSchema,
         required=True,
-        description="Type of resource (e.g., record, community, user).",
+        metadata={
+            "description": "Type of resource (e.g., record, community, user).",
+        },
     )
     metadata = fields.Nested(
         MetadataSchema,
         required=False,
-        description="Additional structured metadata for logging.",
+        metadata={
+            "description": "Additional structured metadata for logging.",
+        },
     )
 
     user = fields.Nested(
         UserSchema,
         dump_only=True,
         required=True,
-        description="Information about the user who triggered the event.",
+        metadata={
+            "description": "Information about the user who triggered the event.",
+        },
     )
 
     @post_load
