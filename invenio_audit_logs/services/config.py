@@ -72,7 +72,7 @@ class AuditLogSearchOptions(SearchOptionsBase):
             field="action",
             label="Action",
             value_labels=lambda keys: {
-                k: current_audit_logs_actions_registry[k].name for k in keys
+                k: current_audit_logs_actions_registry[k].action for k in keys
             },
         ),
         "user": TermsFacet(

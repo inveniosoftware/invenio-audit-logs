@@ -8,7 +8,28 @@
 
 """Unit of work operations for audit logs."""
 
-from invenio_records_resources.services.uow import RecordCommitOp
+from flask import current_app
+from invenio_records_resources.services.uow import Operation, RecordCommitOp
+
+from ..proxies import current_audit_logs_service
+
+
+class AuditLogOp(Operation):
+    """Audit logging operation."""
+
+    def __init__(self, data, identity):
+        """Initialize operation."""
+        self.data = data
+        self.identity = identity
+
+    def on_register(self, uow):
+        """Register the operation."""
+        if self.data:
+            current_audit_logs_service.create(
+                data=self.data,
+                identity=self.identity,
+                uow=uow,  # It will persist the log when on_commit is triggered
+            )
 
 
 class AuditRecordCommitOp(RecordCommitOp):

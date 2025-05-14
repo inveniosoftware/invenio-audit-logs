@@ -117,21 +117,25 @@ class AuditLogSchema(Schema):
             "description": "Additional structured metadata for logging.",
         },
     )
-
     user = fields.Nested(
         UserSchema,
-        dump_only=True,
         required=True,
         metadata={
             "description": "Information about the user who triggered the event.",
         },
     )
 
-    @post_load
-    def _lift_up_fields(self, json, **kwargs):
-        """Lift up nested fields for DB insert."""
-        json["resource_type"] = json["resource"].get("type")
-        return json
+    # Load only fields for DB insert
+    user_id = fields.Str(
+        required=True,
+        description="ID of the user who triggered the event.",
+        load_only=True,
+    )
+    resource_type = fields.Str(
+        required=True,
+        description="Type of resource (e.g., record, community, user).",
+        load_only=True,
+    )
 
     @pre_dump
     def _add_timestamp(self, obj, **kwargs):

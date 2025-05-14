@@ -9,8 +9,8 @@
 
 from invenio_records.systemfields import ModelField
 
-from ...actions import AuditAction
 from ...proxies import current_audit_logs_actions_registry
+from ...services.builders import AuditLogBuilder
 
 
 class ActionField(ModelField):
@@ -18,22 +18,22 @@ class ActionField(ModelField):
 
     @staticmethod
     def get_instance(action):
-        """Ensure that always an instance of AuditAction is returned."""
+        """Ensure that always an instance of AuditLogBuilder is returned."""
         if isinstance(action, str):
             action = current_audit_logs_actions_registry[action]
 
-        if not isinstance(action, AuditAction):
-            raise TypeError(f"Expected 'AuditAction' but got: '{type(action)}'")
+        if not issubclass(action, AuditLogBuilder):
+            raise TypeError(f"Expected 'AuditLogBuilder' but got: '{type(action)}'")
         return action
 
     def _set(self, model, action):
         """Set the model value (stores action ID as string)."""
         action = self.get_instance(action)
-        super()._set(model, action.name)
+        super()._set(model, action.action)
 
     def set_obj(self, instance, obj):
-        """Set the field from an AuditAction object."""
-        self.set_dictkey(instance, obj.name)
+        """Set the field from an AuditLogBuilder object."""
+        self.set_dictkey(instance, obj.action)
         self._set_cache(instance, obj)
         self._set(instance.model, obj)
 
@@ -44,7 +44,7 @@ class ActionField(ModelField):
         self.set_obj(record, action)
 
     def obj(self, instance):
-        """Get the AuditAction instance."""
+        """Get the AuditLogBuilder instance."""
         obj = self._get_cache(instance)
         if obj is not None:
             return obj
@@ -59,7 +59,7 @@ class ActionField(ModelField):
         return obj
 
     def __get__(self, record, owner=None):
-        """Get the AuditAction instance (record-level access)."""
+        """Get the AuditLogBuilder instance (record-level access)."""
         if record is None:
             return self
         return self.obj(record)
@@ -75,6 +75,6 @@ class ActionField(ModelField):
 
         action_obj = self.get_instance(_action)
         try:
-            current_audit_logs_actions_registry[action_obj.name]
+            current_audit_logs_actions_registry[action_obj.action]
         except KeyError:
-            raise TypeError(f"Audit action '{action_obj.name}' is not registered.")
+            raise TypeError(f"Audit action '{action_obj.action}' is not registered.")

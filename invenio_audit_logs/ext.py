@@ -11,7 +11,7 @@ from importlib_metadata import entry_points
 
 from . import config
 from .resources import AuditLogResource, AuditLogResourceConfig
-from .services import AuditLogService, AuditLogServiceConfig, DisabledAuditLogService
+from .services import AuditLogService, AuditLogServiceConfig
 
 
 class InvenioAuditLogs(object):
@@ -53,6 +53,6 @@ class InvenioAuditLogs(object):
         """Action loading registry."""
         self.actions_registry = {}
         for ep in entry_points(group="invenio_audit_logs.actions"):
-            resource_actions = ep.load()
-            for action_name, action_factory in resource_actions().items():
-                self.actions_registry[action_name] = action_factory
+            action_name = ep.name
+            action_builder = ep.load()
+            self.actions_registry[action_name] = action_builder

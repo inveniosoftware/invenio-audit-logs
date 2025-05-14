@@ -7,6 +7,7 @@
 
 """Configuration for invenio-audit-logs."""
 
+from invenio_records_resources.references.entity_resolvers import ServiceResultResolver
 from invenio_records_resources.services.records.facets import TermsFacet
 
 from .proxies import current_audit_logs_actions_registry
@@ -38,7 +39,7 @@ AUDIT_LOGS_FACETS = {
             field="action",
             label="Action",
             value_labels=lambda keys: {
-                k: current_audit_logs_actions_registry[k].name for k in keys
+                k: current_audit_logs_actions_registry[k].action for k in keys
             },
         ),
         ui=dict(field="action"),
@@ -62,3 +63,8 @@ AUDIT_LOGS_SORT_OPTIONS = {
 
 AUDIT_LOGS_ENABLED = False
 """Feature flag. Disabled by default due to experimental nature of the APIs. Feature is not fully stable."""
+
+AUDIT_LOGS_ENTITY_RESOLVERS = [
+    # ServiceResultResolver(service_id="users", type_key="user"),
+]
+"""Entity resolvers for audit logs."""

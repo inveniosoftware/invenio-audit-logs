@@ -10,8 +10,6 @@
 
 from datetime import datetime
 
-from invenio_access.permissions import system_identity
-from invenio_accounts.proxies import current_datastore
 from invenio_records_resources.services.records import RecordService
 from invenio_records_resources.services.uow import unit_of_work
 
@@ -30,10 +28,6 @@ class AuditLogService(RecordService):
         :param bool raise_errors: raise schema ValidationError or not.
         :param dict uow: Unit of Work.
         """
-        if not self.config.enabled:
-            # don't create log if feature disabled
-            return
-
         self.require_permission(identity, "create")
 
         if "created" not in data:
@@ -48,28 +42,11 @@ class AuditLogService(RecordService):
             raise_errors=raise_errors,
         )
 
-        # TODO - to be changed to entity resolver
-        if identity.id == system_identity.id:
-            data["user"] = {
-                "id": system_identity.id,
-                "email": "system@system.org",
-            }  # TODO: Remove this after confirming system user email is passed
-            data["user_id"] = system_identity.id
-        else:
-            user = current_datastore.get_user(identity.id)
-            user_blob = {"id": str(user.id), "email": user.email}
-            if user.username:
-                user_blob["name"] = user.username
-            data["user"] = user_blob
-            data["user_id"] = user.id
-
         record = self.record_cls.create(
             {},
             **data,
         )
 
-        # The user and session data is populated via component
-        self.run_components("create", identity=identity, record=record)
         # Persist record (DB and index)
         uow.register(AuditRecordCommitOp(record, self.indexer))
 
@@ -100,11 +77,3 @@ class AuditLogService(RecordService):
             log,
             links_tpl=self.links_item_tpl,
         )
-
-
-class DisabledAuditLogService(AuditLogService):
-    """Disabled Audit Log Service."""
-
-    def create(self, *args, **kwargs):
-        """Overridden create method."""
-        return None
