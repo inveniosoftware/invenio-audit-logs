@@ -7,10 +7,13 @@
 
 import pytest
 from flask import g
-from invenio_access.permissions import system_identity, system_user_id
+from invenio_access.permissions import system_identity
 from invenio_records_resources.services.errors import PermissionDeniedError
+from invenio_records_resources.services.uow import UnitOfWork
+from mock_module.auditlog_actions import DraftCreateAuditLog
 
 from invenio_audit_logs.proxies import current_audit_logs_service
+from invenio_audit_logs.services import AuditLogOp
 
 
 @pytest.fixture
@@ -56,7 +59,7 @@ def test_audit_log_create_identity_mismatch(
             )
 
 
-def test_audit_log_create_system_identity(app, db, service, resource_data):
+def test_audit_log_create_system_identity(app, service, resource_data, current_user):
     """Should succeed when identity is system."""
     with app.test_request_context():
         result = service.create(
@@ -71,4 +74,32 @@ def test_audit_log_create_system_identity(app, db, service, resource_data):
         assert result["action"] == "draft.create"
         assert result["resource"]["id"] == "abcd-1234"
         assert result["resource"]["type"] == "record"
-        assert result["user"]["id"] == system_user_id
+        assert result["user"]["id"] == "1"
+
+
+def test_audit_log_builder(app, client, db, service, current_user):
+    """Should succeed when creating an audit log via AuditLogBuilder using unit of work."""
+    with app.test_request_context():
+        current_user.login(client)
+        with UnitOfWork(db.session) as uow:
+            # Create the audit log
+            op = AuditLogOp(
+                DraftCreateAuditLog.build(
+                    resource_id="efgh-5678",
+                    identity=current_user.identity,
+                ),
+                identity=current_user.identity,
+            )
+            uow.register(op)
+            uow.commit()
+
+            # Read the created audit log
+            result = service.read(
+                identity=system_identity,
+                id_=op.result["id"],
+            )
+
+            assert result["action"] == "draft.create"
+            assert result["resource"]["id"] == "efgh-5678"
+            assert result["resource"]["type"] == "record"
+            assert result["user"]["id"] == "1"

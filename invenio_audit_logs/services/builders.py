@@ -8,54 +8,25 @@
 
 """Audit log data building utils."""
 
+from abc import ABC
+
 from flask import current_app
-from invenio_access.permissions import system_identity
-from invenio_records.dictutils import dict_lookup, dict_set
-from invenio_records_resources.references.entity_resolvers import ServiceResultResolver
 
 
-class UserResolve:
-    """Payload generator for audit log using the service result resolvers."""
-
-    def __init__(self, key):
-        """Ctor."""
-        self.key = key
-
-    def __call__(self, resolver, log_data):
-        """Update required recipient information and add backend id."""
-        entity_ref = dict_lookup(log_data, self.key)
-        if entity_ref == system_identity.id:
-            entity_data = {
-                "id": str(system_identity.id),
-                "name": "system",
-                "email": "system@system.org",
-            }
-        else:
-            entity = resolver.get_entity_proxy({self.key: entity_ref}).resolve()
-            entity_data = {
-                "id": str(entity["id"]),
-                "name": entity["username"],
-                "email": entity["email"],
-            }
-        dict_set(log_data, self.key, entity_data)
-
-
-class AuditLogBuilder:
+class AuditLogBuilder(ABC):
     """Audit log builder for audit operations."""
 
-    context = [
-        ServiceResultResolver(service_id="users", type_key="user"),
-    ]
+    context = None
 
     action = None
     resource_type = None
     message_template = None
 
     @classmethod
-    def build(cls, resource, action, identity):
+    def build(cls, resource, action, identity, **kwargs):
         """Build and register the audit log operation."""
 
-        if not current_app.config.get("AUDIT_LOGS_ENABLED", False):  # Fix later
+        if not current_app.config.get("AUDIT_LOGS_ENABLED", False):
             return
 
         data = {
@@ -65,15 +36,12 @@ class AuditLogBuilder:
             "user_id": str(identity.id),
             "resource_type": resource["type"],
         }
-        data = cls.resolve_user_context(cls, data)
+        data = cls.resolve_context(cls, data, **kwargs)
         return data
 
-    def resolve_user_context(self, log_data):
-        """Resolve all references in the audit log context."""
-        for resolver in self.context:
-            entity_resolver = UserResolve(resolver.type_key)
-            entity_resolver(resolver, log_data)
-        return log_data
+    def resolve_context(self, data, **kwargs):
+        """Resolve the context using the provided data."""
+        NotImplementedError("The context resolver is not implemented for this action.")
 
     def render_message(self, data):
         """Render the message using the provided data."""

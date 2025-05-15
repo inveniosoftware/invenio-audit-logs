@@ -8,14 +8,34 @@
 
 """Action registration via entrypoint function."""
 
-from invenio_audit_logs.actions import AuditAction
+from invenio_audit_logs.services import AuditLogBuilder
 
 
-def record_actions():
-    """Function to add actions to the registry."""
-    return {
-        "draft.create": AuditAction(
-            name="draft.create",
-            message_template="User {user_id} created the draft {resource_id}.",
-        ),
-    }
+class DraftCreateAuditLog(AuditLogBuilder):
+    """Audit log for draft creation."""
+
+    resource_type = "record"
+    action = "draft.create"
+    message_template = ("User {user_id} created the draft {resource_id}.",)
+
+    @classmethod
+    def build(cls, resource_id, identity):
+        """Build the log."""
+        return super().build(
+            resource={
+                "id": resource_id,
+                "type": cls.resource_type,
+            },
+            action=cls.action,
+            identity=identity,
+        )
+
+    def resolve_context(self, data, **kwargs):
+        """Resolve the context using the provided data."""
+        # This is just a placeholder implementation.
+        data["user"] = dict(
+            id="1",
+            name="User",
+            email="current@inveniosoftware.org",
+        )
+        return data

@@ -48,7 +48,14 @@ def resource_data():
             type="record",
             id="abcd-1234",
         ),
+        resource_type="record",
         message=f" created the draft.",
+        user=dict(
+            id="1",
+            name="User",
+            email="current@inveniosoftware.org",
+        ),
+        user_id="1",
     )
 
 

@@ -65,7 +65,7 @@ class AuditLogService(RecordService):
         **kwargs,
     ):
         """Read a record."""
-        self.require_permission(identity, "read", user_identity=identity)
+        self.require_permission(identity, "read")
 
         # Read the record
         log = self.record_cls.get_record(id_=id_)

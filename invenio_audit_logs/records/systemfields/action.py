@@ -62,7 +62,7 @@ class ActionField(ModelField):
         """Get the AuditLogBuilder instance (record-level access)."""
         if record is None:
             return self
-        return self.obj(record)
+        return self.obj(record).action
 
     #
     # Record extension

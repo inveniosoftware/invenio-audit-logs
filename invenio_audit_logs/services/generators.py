@@ -19,6 +19,6 @@ class CurrentUser(Generator):
 
     def needs(self, identity=None, **kwargs):
         """Check if the user identity matches the identity in the request."""
-        if identity:
+        if current_user:
             return [UserNeed(current_user.id)]
         return [system_process]
