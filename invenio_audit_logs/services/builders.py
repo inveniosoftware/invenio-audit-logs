@@ -25,7 +25,6 @@ class AuditLogBuilder(ABC):
     @classmethod
     def build(cls, resource, action, identity, **kwargs):
         """Build and register the audit log operation."""
-
         if not current_app.config.get("AUDIT_LOGS_ENABLED", False):
             return
 

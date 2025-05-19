@@ -13,9 +13,13 @@ fixtures are available.
 
 import pytest
 from flask_principal import Identity, UserNeed
+from flask_security import login_user
 from invenio_access.permissions import authenticated_user
+from invenio_accounts.testutils import login_user_via_session
 from invenio_app.factory import create_api
 from invenio_search import current_search
+
+from invenio_audit_logs.proxies import current_audit_logs_service
 
 
 @pytest.fixture(scope="module")
@@ -28,6 +32,12 @@ def create_app(instance_path, entry_points):
 def setup_index_templates(app):
     """Setup index templates."""
     list(current_search.put_index_templates())
+
+
+@pytest.fixture
+def service(appctx):
+    """Fixture for the current service."""
+    return current_audit_logs_service
 
 
 @pytest.fixture(scope="function")
@@ -59,22 +69,28 @@ def resource_data():
     )
 
 
-@pytest.fixture(scope="module")
-def current_user(UserFixture, app, database):
+@pytest.fixture()
+def current_user(app, db):
     """Users."""
-    user = UserFixture(
-        email=f"current@inveniosoftware.org",
-        password="123456",
-        username="User",
-        user_profile={
-            "full_name": "User",
-            "affiliations": "CERN",
-        },
-        active=True,
-        confirmed=True,
-    )
-    user.create(app, database)
-    # when using `database` fixture (and not `db`), commit the creation of the
-    # user because its implementation uses a nested session instead
-    database.session.commit()
+    with db.session.begin_nested():
+        datastore = app.extensions["security"].datastore
+        user = datastore.create_user(
+            email="current@inveniosoftware.org",
+            password="123456",
+            username="User",
+            user_profile={
+                "full_name": "User",
+                "affiliations": "CERN",
+            },
+            active=True,
+        )
+    db.session.commit()
     return user
+
+
+@pytest.fixture()
+def client_with_login(client, current_user):
+    """Log in a user to the client."""
+    login_user(current_user, remember=True)
+    login_user_via_session(client, email=current_user.email)
+    return client
