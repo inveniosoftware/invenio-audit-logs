@@ -13,17 +13,17 @@ from abc import ABC
 from flask import current_app
 
 
-class AuditLogBuilder(ABC):
+class AuditLogAction(ABC):
     """Audit log builder for audit operations."""
 
-    context = None
+    context = []
 
-    action = None
+    id = None
     resource_type = None
     message_template = None
 
     @classmethod
-    def build(cls, resource, action, identity, **kwargs):
+    def build(cls, identity, action, resource, **kwargs):
         """Build and register the audit log operation."""
         if not current_app.config.get("AUDIT_LOGS_ENABLED", False):
             return
@@ -31,16 +31,16 @@ class AuditLogBuilder(ABC):
         data = {
             "action": action,
             "resource": resource,
-            "user": identity.id,
             "user_id": str(identity.id),
             "resource_type": resource["type"],
         }
-        data = cls.resolve_context(cls, data, **kwargs)
+        cls.resolve_context(cls, data, **kwargs)
         return data
 
     def resolve_context(self, data, **kwargs):
         """Resolve the context using the provided data."""
-        NotImplementedError("The context resolver is not implemented for this action.")
+        for context in self.context:
+            context(data, **kwargs)
 
     def render_message(self, data):
         """Render the message using the provided data."""
@@ -49,8 +49,8 @@ class AuditLogBuilder(ABC):
     def __str__(self):
         """Return str(self)."""
         # Value used by marshmallow schemas to represent the type.
-        return self.action
+        return self.id
 
     def __repr__(self):
         """Return repr(self)."""
-        return f"<AuditLogBuilder '{self.action}'>"
+        return f"<AuditLogAction '{self.id}'>"

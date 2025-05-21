@@ -24,7 +24,6 @@ from invenio_records_resources.services.records.params import (
     SortParam,
 )
 from invenio_records_resources.services.records.queryparser import QueryParser
-from sqlalchemy import asc, desc
 
 from ..proxies import current_audit_logs_actions_registry
 from ..records import AuditLog
@@ -39,17 +38,12 @@ class AuditLogSearchOptions(SearchOptionsBase):
     sort_default = "newest"
     sort_default_no_query = "newest"
 
-    sort_direction_default = "asc"
-    sort_direction_options = {
-        "asc": dict(title=_("Ascending"), fn=asc),
-        "desc": dict(title=_("Descending"), fn=desc),
-    }
-
     query_parser_cls = QueryParser.factory(
         fields=[
             "id",
             "action",
             "user.id",
+            "user.name",  # TODO: Resolve to id on search?
             "user.email",
             "resource.id",
             "resource.type",
@@ -72,7 +66,7 @@ class AuditLogSearchOptions(SearchOptionsBase):
             field="action",
             label="Action",
             value_labels=lambda keys: {
-                k: current_audit_logs_actions_registry[k].action for k in keys
+                k: current_audit_logs_actions_registry[k].id for k in keys
             },
         ),
         "user": TermsFacet(
@@ -82,7 +76,7 @@ class AuditLogSearchOptions(SearchOptionsBase):
         ),
     }
 
-    pagination_options = {"default_results_per_page": 25, "default_max_results": 10}
+    pagination_options = {"default_results_per_page": 20, "default_max_results": 1000}
 
     params_interpreters_cls = [
         QueryStrParam,

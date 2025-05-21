@@ -53,6 +53,6 @@ class InvenioAuditLogs(object):
         """Action loading registry."""
         self.actions_registry = {}
         for ep in entry_points(group="invenio_audit_logs.actions"):
-            action_name = ep.name
-            action_builder = ep.load()
-            self.actions_registry[action_name] = action_builder
+            action = ep.load()
+            action_name = action.id
+            self.actions_registry[action_name] = action

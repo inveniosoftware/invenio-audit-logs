@@ -17,7 +17,7 @@ from invenio_audit_logs.services import AuditLogOp
 
 
 def test_audit_log_builder(app, client_with_login, current_user, db, service):
-    """Should succeed when creating an audit log via AuditLogBuilder using unit of work."""
+    """Should succeed when creating an audit log via AuditLogAction using unit of work."""
     login_user(current_user, force=True)
     with app.test_request_context():
         with UnitOfWork(db.session) as uow:
@@ -27,7 +27,6 @@ def test_audit_log_builder(app, client_with_login, current_user, db, service):
                     resource_id="efgh-5678",
                     identity=g.identity,
                 ),
-                identity=g.identity,
             )
             uow.register(op)
             uow.commit()

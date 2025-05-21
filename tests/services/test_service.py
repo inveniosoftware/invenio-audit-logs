@@ -13,7 +13,7 @@ from invenio_access.permissions import system_identity
 from invenio_records_resources.services.errors import PermissionDeniedError
 
 
-def test_audit_log_create_identity_match(
+def test_audit_log_create(
     app,
     db,
     service,
@@ -25,9 +25,8 @@ def test_audit_log_create_identity_match(
     login_user(current_user, force=True)
 
     with app.test_request_context():
-        # g.identity = current_user.identity  # Set context identity
         result = service.create(
-            identity=g.identity,  # Same identity
+            identity=system_identity,
             data=resource_data,
         )
 
@@ -57,9 +56,14 @@ def test_audit_log_create_identity_mismatch(
 
 def test_audit_log_create_system_identity(app, service, resource_data):
     """Should succeed when identity is system."""
+    resource_data["user"] = {
+        "id": "system",
+        "name": "System",
+        "email": "system@inveniosoftware.org",
+    }
     with app.test_request_context():
         result = service.create(
-            identity=system_identity,  # System
+            identity=system_identity,
             data=resource_data,
         )
 
@@ -70,4 +74,4 @@ def test_audit_log_create_system_identity(app, service, resource_data):
         assert result["action"] == "draft.create"
         assert result["resource"]["id"] == "abcd-1234"
         assert result["resource"]["type"] == "record"
-        assert result["user"]["id"] == "1"
+        assert result["user"]["id"] == "system"

@@ -8,6 +8,7 @@
 
 """Unit of work operations for audit logs."""
 
+from invenio_access.permissions import system_identity
 from invenio_records_resources.services.uow import Operation, RecordCommitOp
 
 from ..proxies import current_audit_logs_service
@@ -16,7 +17,7 @@ from ..proxies import current_audit_logs_service
 class AuditLogOp(Operation):
     """Audit logging operation."""
 
-    def __init__(self, data, identity):
+    def __init__(self, data, identity=system_identity):
         """Initialize operation."""
         self.data = data
         self.identity = identity
@@ -24,12 +25,11 @@ class AuditLogOp(Operation):
 
     def on_register(self, uow):
         """Register the operation."""
-        if self.data:
-            self.result = current_audit_logs_service.create(
-                data=self.data,
-                identity=self.identity,
-                uow=uow,  # It will persist the log when on_commit is triggered
-            )
+        self.result = current_audit_logs_service.create(
+            data=self.data,
+            identity=self.identity,
+            uow=uow,  # It will persist the log when on_commit is triggered
+        )
 
 
 class AuditRecordCommitOp(RecordCommitOp):

@@ -7,7 +7,7 @@
 
 """Audit Log Services."""
 
-from .builders import AuditLogBuilder
+from .action import AuditLogAction
 from .config import AuditLogServiceConfig
 from .schema import AuditLogSchema
 from .service import AuditLogService
@@ -17,6 +17,6 @@ __all__ = (
     "AuditLogService",
     "AuditLogSchema",
     "AuditLogServiceConfig",
-    "AuditLogBuilder",
+    "AuditLogAction",
     "AuditLogOp",
 )

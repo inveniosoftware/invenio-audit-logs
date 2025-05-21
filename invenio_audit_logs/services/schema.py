@@ -11,7 +11,7 @@
 
 from datetime import datetime
 
-from marshmallow import EXCLUDE, Schema, fields, post_load, pre_dump
+from marshmallow import EXCLUDE, Schema, fields, pre_dump
 
 
 class ResourceSchema(Schema):
@@ -51,6 +51,14 @@ class MetadataSchema(Schema):
         metadata={
             "description": "Unique identifier for the request.",
         },
+    )
+    parent_pid = fields.Str(
+        required=False,
+        description="Parent ID of the resource.",
+    )
+    revision_id = fields.Int(
+        required=False,
+        description="Version id of the resource.",
     )
 
 

@@ -8,10 +8,10 @@
 
 """Action registration via entrypoint function."""
 
-from invenio_audit_logs.services import AuditLogBuilder
+from invenio_audit_logs.services import AuditLogAction
 
 
-class DraftCreateAuditLog(AuditLogBuilder):
+class DraftCreateAuditLog(AuditLogAction):
     """Audit log for draft creation."""
 
     resource_type = "record"

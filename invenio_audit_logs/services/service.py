@@ -28,6 +28,11 @@ class AuditLogService(RecordService):
         :param bool raise_errors: raise schema ValidationError or not.
         :param dict uow: Unit of Work.
         """
+
+        if not self.config.enabled:
+            # don't create log if feature disabled
+            return
+
         self.require_permission(identity, "create")
 
         if "created" not in data:
