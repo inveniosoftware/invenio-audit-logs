@@ -14,7 +14,7 @@ fixtures are available.
 import pytest
 from flask_principal import Identity, UserNeed
 from flask_security import login_user
-from invenio_access.permissions import authenticated_user
+from invenio_access.permissions import authenticated_user, system_user_id
 from invenio_accounts.testutils import login_user_via_session
 from invenio_app.factory import create_api
 from invenio_search import current_search
@@ -62,11 +62,21 @@ def resource_data():
         message=f" created the draft.",
         user=dict(
             id="1",
-            name="User",
+            username="User",
             email="current@inveniosoftware.org",
         ),
         user_id="1",
     )
+
+
+@pytest.fixture()
+def system_user():
+    """System user."""
+    return {
+        "id": system_user_id,
+        "username": "System",
+        "email": "noreply@inveniosoftware.org",
+    }
 
 
 @pytest.fixture()

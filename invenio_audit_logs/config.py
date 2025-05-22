@@ -13,7 +13,7 @@ from invenio_records_resources.services.records.facets import TermsFacet
 from .proxies import current_audit_logs_actions_registry
 
 AUDIT_LOGS_SEARCH = {
-    "facets": ["resource", "user", "action_name"],
+    "facets": ["resource", "action_name"],
     "sort": [
         "bestmatch",
         "newest",
@@ -44,14 +44,6 @@ AUDIT_LOGS_FACETS = {
         ),
         ui=dict(field="action"),
     ),
-    "user": dict(
-        facet=TermsFacet(
-            field="user.id",
-            label="User",
-            value_labels=lambda ids: {id: id.upper() for id in ids},
-        ),
-        ui=dict(field="user.id"),
-    ),
 }
 
 AUDIT_LOGS_SORT_OPTIONS = {
@@ -63,3 +55,11 @@ AUDIT_LOGS_SORT_OPTIONS = {
 
 AUDIT_LOGS_ENABLED = False
 """Feature flag. Disabled by default due to experimental nature of the APIs. Feature is not fully stable."""
+
+AUDIT_LOGS_METADATA_FIELDS = {
+    "revision_id": True,
+    "parent_pid": True,
+    "ip_address": True,
+    "session": True,
+    "request_id": False,
+}

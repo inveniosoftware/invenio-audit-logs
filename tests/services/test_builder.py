@@ -31,13 +31,21 @@ def test_audit_log_builder(app, client_with_login, current_user, db, service):
             uow.register(op)
             uow.commit()
 
-            # Read the created audit log
-            result = service.read(
-                identity=system_identity,
-                id_=op.result["id"],
-            )
+    # Read the created audit log
+    result = service.read(
+        identity=system_identity,
+        id_=op.result["id"],
+    )
 
-            assert result["action"] == "draft.create"
-            assert result["resource"]["id"] == "efgh-5678"
-            assert result["resource"]["type"] == "record"
-            assert result["user"]["id"] == "1"
+    assert result["action"] == "draft.create"
+    assert result["resource"]["id"] == "efgh-5678"
+    assert result["resource"]["type"] == "record"
+    assert result["user"]["id"] == "1"
+
+    service.record_cls.index.refresh()
+
+    search_result = service.search(
+        identity=system_identity,
+        params={"q": "resource.id: efgh-5678 AND action: draft.create"},
+    )
+    assert search_result.total == 1

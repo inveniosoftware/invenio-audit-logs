@@ -14,8 +14,9 @@ from invenio_audit_logs.services import AuditLogAction
 class DraftCreateAuditLog(AuditLogAction):
     """Audit log for draft creation."""
 
+    id = "draft.create"
     resource_type = "record"
-    action = "draft.create"
+
     message_template = ("User {user_id} created the draft {resource_id}.",)
 
     @classmethod
@@ -26,7 +27,7 @@ class DraftCreateAuditLog(AuditLogAction):
                 "id": resource_id,
                 "type": cls.resource_type,
             },
-            action=cls.action,
+            action=cls.id,
             identity=identity,
         )
 
@@ -35,7 +36,7 @@ class DraftCreateAuditLog(AuditLogAction):
         # This is just a placeholder implementation.
         data["user"] = dict(
             id="1",
-            name="User",
+            username="User",
             email="current@inveniosoftware.org",
         )
         return data

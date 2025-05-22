@@ -43,7 +43,7 @@
         "user": {
           "properties": {
             "id": { "type": "keyword" },
-            "name": { "type": "keyword" },
+            "username": { "type": "keyword" },
             "email": {
               "type": "text",
               "analyzer": "email",

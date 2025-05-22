@@ -11,7 +11,7 @@
 
 from datetime import datetime
 
-from marshmallow import EXCLUDE, Schema, fields, pre_dump
+from marshmallow import EXCLUDE, Schema, fields, pre_dump, pre_load
 
 
 class ResourceSchema(Schema):
@@ -34,6 +34,11 @@ class ResourceSchema(Schema):
 class MetadataSchema(Schema):
     """Metadata schema for logging."""
 
+    class Meta:
+        """Meta class to ignore unknown fields."""
+
+        unknown = EXCLUDE  # Ignore unknown fields
+
     ip_address = fields.Str(
         required=False,
         metadata={
@@ -54,16 +59,25 @@ class MetadataSchema(Schema):
     )
     parent_pid = fields.Str(
         required=False,
-        description="Parent ID of the resource.",
+        metadata={
+            "description": "Record Parent ID.",
+        },
     )
     revision_id = fields.Int(
         required=False,
-        description="Version id of the resource.",
+        metadata={
+            "description": "Record revision id.",
+        },
     )
 
 
 class UserSchema(Schema):
     """User schema for logging."""
+
+    class Meta:
+        """Meta class to ignore unknown fields."""
+
+        unknown = EXCLUDE  # Ignore unknown fields
 
     id = fields.Str(
         required=True,
@@ -71,7 +85,7 @@ class UserSchema(Schema):
             "description": "ID of the user who triggered the event.",
         },
     )
-    name = fields.Str(
+    username = fields.Str(
         required=False,
         metadata={
             "description": "User name (if available).",
@@ -83,6 +97,23 @@ class UserSchema(Schema):
             "description": "User email.",
         },
     )
+
+    @pre_load
+    def _resolve_user(self, obj, **kwargs):
+        """Resolve user data from the input data."""
+        if not isinstance(obj, dict):
+            data = {
+                "id": str(obj.id),  # Convert from Int
+                "username": obj.username,
+                "email": obj.email,
+            }
+        else:
+            data = obj
+        if data["username"]:
+            data["username"] = str(data["username"])  # In case of translated string
+        else:
+            del data["username"]
+        return data
 
 
 class AuditLogSchema(Schema):
@@ -136,12 +167,16 @@ class AuditLogSchema(Schema):
     # Load only fields for DB insert
     user_id = fields.Str(
         required=True,
-        description="ID of the user who triggered the event.",
+        metadata={
+            "decription": "ID of the user who triggered the event.",
+        },
         load_only=True,
     )
     resource_type = fields.Str(
         required=True,
-        description="Type of resource (e.g., record, community, user).",
+        metadata={
+            "description": "Type of resource (e.g., record, community, user).",
+        },
         load_only=True,
     )
 

@@ -20,19 +20,20 @@ class AuditLogAction(ABC):
 
     id = None
     resource_type = None
+
     message_template = None
 
     @classmethod
-    def build(cls, identity, action, resource, **kwargs):
+    def build(cls, identity, resource_id, **kwargs):
         """Build and register the audit log operation."""
         if not current_app.config.get("AUDIT_LOGS_ENABLED", False):
             return
 
         data = {
-            "action": action,
-            "resource": resource,
+            "action": cls.id,
+            "resource": {"id": resource_id, "type": cls.resource_type},
             "user_id": str(identity.id),
-            "resource_type": resource["type"],
+            "resource_type": cls.resource_type,
         }
         cls.resolve_context(cls, data, **kwargs)
         return data

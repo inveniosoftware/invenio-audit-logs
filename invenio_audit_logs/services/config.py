@@ -43,7 +43,7 @@ class AuditLogSearchOptions(SearchOptionsBase):
             "id",
             "action",
             "user.id",
-            "user.name",  # TODO: Resolve to id on search?
+            "user.username",
             "user.email",
             "resource.id",
             "resource.type",
@@ -68,11 +68,6 @@ class AuditLogSearchOptions(SearchOptionsBase):
             value_labels=lambda keys: {
                 k: current_audit_logs_actions_registry[k].id for k in keys
             },
-        ),
-        "user": TermsFacet(
-            field="user.id",
-            label="User",
-            value_labels=lambda ids: {id: id.upper() for id in ids},
         ),
     }
 
