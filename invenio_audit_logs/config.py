@@ -7,7 +7,6 @@
 
 """Configuration for invenio-audit-logs."""
 
-from invenio_records_resources.references.entity_resolvers import ServiceResultResolver
 from invenio_records_resources.services.records.facets import TermsFacet
 
 from .proxies import current_audit_logs_actions_registry
@@ -63,3 +62,4 @@ AUDIT_LOGS_METADATA_FIELDS = {
     "session": True,
     "request_id": False,
 }
+"""Metadata fields to be included in the audit log."""

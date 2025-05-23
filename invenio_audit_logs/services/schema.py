@@ -99,8 +99,8 @@ class UserSchema(Schema):
     )
 
     @pre_load
-    def _resolve_user(self, obj, **kwargs):
-        """Resolve user data from the input data."""
+    def serialize_user(self, obj, **kwargs):
+        """Serialize user data to a dictionary."""
         if not isinstance(obj, dict):
             data = {
                 "id": str(obj.id),  # Convert from Int
@@ -181,7 +181,7 @@ class AuditLogSchema(Schema):
     )
 
     @pre_dump
-    def _add_timestamp(self, obj, **kwargs):
+    def add_timestamp(self, obj, **kwargs):
         """Set json field for schema validation."""
         if getattr(obj, "model", None):  # From DB
             timestamp = obj.model.created

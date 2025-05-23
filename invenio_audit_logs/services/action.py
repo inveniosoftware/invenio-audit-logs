@@ -8,12 +8,10 @@
 
 """Audit log data building utils."""
 
-from abc import ABC
-
 from flask import current_app
 
 
-class AuditLogAction(ABC):
+class AuditLogAction:
     """Audit log builder for audit operations."""
 
     context = []
@@ -26,7 +24,7 @@ class AuditLogAction(ABC):
     @classmethod
     def build(cls, identity, resource_id, **kwargs):
         """Build and register the audit log operation."""
-        if not current_app.config.get("AUDIT_LOGS_ENABLED", False):
+        if not current_app.config["AUDIT_LOGS_ENABLED"]:
             return
 
         data = {
