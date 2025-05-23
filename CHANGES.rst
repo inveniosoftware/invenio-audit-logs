@@ -8,6 +8,12 @@
 Changes
 =======
 
+Version 0.2.0 (released 2025-05-23)
+
+- services: Add action builder
+- mappings: rename user.name to user.username
+- Refactor entrypoint registration using builder classes
+
 Version 0.1.0 (released 2025-05-07)
 
 - utility release
