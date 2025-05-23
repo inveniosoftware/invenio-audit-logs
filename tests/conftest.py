@@ -34,6 +34,6 @@ def extra_entry_points():
     """Register extra entry point."""
     return {
         "invenio_audit_logs.actions": [
-            "draft.create = mock_module.auditlog_actions:DraftCreateAuditLog",
+            "draft.create = mock_module.auditlog.actions:DraftCreateAuditLog",
         ]
     }

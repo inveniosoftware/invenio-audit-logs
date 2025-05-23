@@ -19,18 +19,6 @@ class DraftCreateAuditLog(AuditLogAction):
 
     message_template = ("User {user_id} created the draft {resource_id}.",)
 
-    @classmethod
-    def build(cls, resource_id, identity):
-        """Build the log."""
-        return super().build(
-            resource={
-                "id": resource_id,
-                "type": cls.resource_type,
-            },
-            action=cls.id,
-            identity=identity,
-        )
-
     def resolve_context(self, data, **kwargs):
         """Resolve the context using the provided data."""
         # This is just a placeholder implementation.

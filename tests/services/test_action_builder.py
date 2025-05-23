@@ -11,7 +11,7 @@ from flask import g
 from flask_login import login_user
 from invenio_access.permissions import system_identity
 from invenio_records_resources.services.uow import UnitOfWork
-from mock_module.auditlog_actions import DraftCreateAuditLog
+from mock_module.auditlog.actions import DraftCreateAuditLog
 
 from invenio_audit_logs.services import AuditLogOp
 
@@ -24,8 +24,8 @@ def test_audit_log_builder(app, client_with_login, current_user, db, service):
             # Create the audit log
             op = AuditLogOp(
                 DraftCreateAuditLog.build(
-                    resource_id="efgh-5678",
                     identity=g.identity,
+                    resource_id="efgh-5678",
                 ),
             )
             uow.register(op)
