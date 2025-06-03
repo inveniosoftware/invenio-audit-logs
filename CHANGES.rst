@@ -1,5 +1,6 @@
 ..
     Copyright (C) 2025 CERN.
+    Copyright (C) 2025 Graz University of Technology.
 
     Invenio-Audit-Logs is free software; you can redistribute it and/or
     modify it under the terms of the MIT License; see LICENSE file for more
@@ -7,6 +8,10 @@
 
 Changes
 =======
+
+Version 0.3.0 (released 2025-06-03)
+
+- setup: bump major dependencies
 
 Version 0.2.0 (released 2025-05-23)
 
