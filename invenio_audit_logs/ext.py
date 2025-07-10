@@ -7,7 +7,7 @@
 
 """Module providing audit logging features for Invenio.."""
 
-from importlib_metadata import entry_points
+from invenio_base.utils import entry_points
 
 from . import config
 from .resources import AuditLogResource, AuditLogResourceConfig
