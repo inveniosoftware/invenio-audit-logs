@@ -9,6 +9,10 @@
 Changes
 =======
 
+Version v0.3.1 (released 2025-07-14)
+
+- chores: replaced importlib_xyz with importlib
+
 Version 0.3.0 (released 2025-06-03)
 
 - setup: bump major dependencies
