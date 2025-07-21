@@ -5,21 +5,23 @@
     "settings": {
       "analysis": {
         "filter": {
-          "email_domains": {
-            "type": "pattern_capture",
-            "preserve_original": false,
-            "patterns": [
-              "@(.+)"
-            ]
+          "lowercase": {
+            "type": "lowercase",
+            "preserve_original": true
+          },
+          "edgegrams": {
+            "type": "edge_ngram",
+            "min_gram": 2,
+            "max_gram": 20
           }
         },
         "analyzer": {
-          "email": {
+          "edge_analyzer": {
             "tokenizer": "uax_url_email",
+            "type": "custom",
             "filter": [
-              "email_domains",
               "lowercase",
-              "unique"
+              "edgegrams"
             ]
           }
         }
@@ -46,13 +48,11 @@
             "username": { "type": "keyword" },
             "email": {
               "type": "text",
-              "analyzer": "email",
-              "fielddata": true,
+              "analyzer": "edge_analyzer",
+              "search_analyzer": "standard",
               "fields": {
-                "domain": {
-                  "type": "text",
-                  "analyzer": "email",
-                  "fielddata": true
+                "keyword": {
+                  "type": "keyword"
                 }
               }
             }

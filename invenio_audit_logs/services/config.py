@@ -45,6 +45,7 @@ class AuditLogSearchOptions(SearchOptionsBase):
             "user.id",
             "user.username",
             "user.email",
+            "user.email.keyword",
             "resource.id",
             "resource.type",
         ]
