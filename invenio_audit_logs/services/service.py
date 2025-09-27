@@ -2,13 +2,14 @@
 #
 # This file is part of Invenio.
 # Copyright (C) 2025 CERN.
+# Copyright (C) 2025 Graz University of Technology.
 #
 # Invenio-Audit-Logs is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 
 """Audit Logs Service API."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from invenio_records_resources.services.records import RecordService
 from invenio_records_resources.services.uow import unit_of_work
@@ -35,7 +36,7 @@ class AuditLogService(RecordService):
         self.require_permission(identity, "create")
 
         if "created" not in data:
-            data["created"] = datetime.utcnow().isoformat()
+            data["created"] = datetime.now(timezone.utc).isoformat()
 
         # Validate data, action, resource_type and create record with id
         data, errors = self.schema.load(
