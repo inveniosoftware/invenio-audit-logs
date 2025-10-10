@@ -7,10 +7,15 @@
 
 """Base model classes for Audit Logs in Invenio."""
 
-
 from invenio_db import db
 from invenio_records.models import RecordMetadataBase
 from sqlalchemy.types import String
+from sqlalchemy_utils.types import UUIDType
+
+try:
+    from uuid import uuid7
+except ImportError:
+    from uuid_utils.compat import uuid7
 
 
 class AuditLog(db.Model, RecordMetadataBase):
@@ -19,6 +24,12 @@ class AuditLog(db.Model, RecordMetadataBase):
     __tablename__ = "audit_logs_metadata"
 
     encoder = None
+
+    id = db.Column(
+        UUIDType,
+        primary_key=True,
+        default=uuid7,
+    )
 
     action = db.Column(String(255), nullable=False)
 
