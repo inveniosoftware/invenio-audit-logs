@@ -9,10 +9,9 @@
 
 from invenio_i18n import lazy_gettext as _
 from invenio_indexer.api import RecordIndexer
-from invenio_records_resources.services import pagination_links
+from invenio_records_resources.services import EndpointLink, pagination_endpoint_links
 from invenio_records_resources.services.base import ServiceConfig
 from invenio_records_resources.services.base.config import ConfiguratorMixin, FromConfig
-from invenio_records_resources.services.base.links import Link
 from invenio_records_resources.services.records.config import (
     SearchOptions as SearchOptionsBase,
 )
@@ -82,11 +81,6 @@ class AuditLogSearchOptions(SearchOptionsBase):
     ]
 
 
-def idvar(log, vars):
-    """Add domain into link vars."""
-    vars["id"] = log.id
-
-
 class AuditLogServiceConfig(ServiceConfig, ConfiguratorMixin):
     """Audit log service configuration."""
 
@@ -106,9 +100,13 @@ class AuditLogServiceConfig(ServiceConfig, ConfiguratorMixin):
 
     components = []
     links_item = {
-        "self": Link("{+api}/audit-logs/{id}", vars=idvar),
+        "self": EndpointLink(
+            "audit_logs.read",
+            vars=lambda obj, vars: vars.update(id=obj.id),
+            params=["id"],
+        ),
     }
-    links_search = pagination_links("{+api}/audit-logs{?args*}")
+    links_search = pagination_endpoint_links("audit_logs.search")
 
     result_item_cls = results.AuditLogItem
     result_list_cls = results.AuditLogList

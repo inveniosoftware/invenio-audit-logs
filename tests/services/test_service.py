@@ -44,14 +44,27 @@ def test_audit_log_create(
         "username": "User",
         "email": "current@inveniosoftware.org",
     }
+    expected_links = {
+        "self": f"https://127.0.0.1:5000/api/audit-logs/{result.id}",
+    }
+    assert expected_links == result["links"]
 
+    # Search
     service.record_cls.index.refresh()
-
     search_result = service.search(
         identity=system_identity,
         params={"q": "resource.id: abcd-1234 AND action: draft.create"},
     )
     assert search_result.total == 1
+    expected_links = {
+        "self": (
+            "https://127.0.0.1:5000/api/audit-logs/?"
+            f"page=1&q=resource.id:+abcd-1234+AND+action:+draft.create"
+            "&size=20&sort=newest"
+        )
+    }
+    data = search_result.to_dict()
+    assert expected_links == data["links"]
 
 
 def test_audit_log_create_identity_mismatch(
