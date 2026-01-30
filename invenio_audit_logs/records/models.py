@@ -7,7 +7,6 @@
 
 """Base model classes for Audit Logs in Invenio."""
 
-
 from invenio_db import db
 from invenio_records.models import RecordMetadataBase
 from sqlalchemy.types import String

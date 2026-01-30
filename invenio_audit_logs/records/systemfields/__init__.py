@@ -7,7 +7,6 @@
 
 """System fields for Audit Log API."""
 
-
 from .action import ActionField
 
 __all__ = ("ActionField",)
