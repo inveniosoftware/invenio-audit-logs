@@ -11,8 +11,10 @@
 
 from datetime import datetime, timezone
 
+from invenio_records_resources.services.base.links import LinksTemplate
 from invenio_records_resources.services.records import RecordService
 from invenio_records_resources.services.uow import unit_of_work
+from opensearchpy.exceptions import NotFoundError
 
 from .uow import AuditRecordCommitOp
 
@@ -82,3 +84,26 @@ class AuditLogService(RecordService):
             log,
             links_tpl=self.links_item_tpl,
         )
+
+    def search(
+        self, identity, params=None, search_preference=None, expand=False, **kwargs
+    ):
+        """Search for records matching the querystring."""
+        self.require_permission(identity, "search")
+        try:
+            return super().search(identity, params, search_preference, expand, **kwargs)
+        except NotFoundError as e:
+            # Initially, audit logs only has an index_template
+            # Therefore it will raise a NotFoundError if at least one record is not indexed yet.
+            # We return an empty list in this case to avoid breaking the search endpoint.
+            return self.result_list(
+                self,
+                identity,
+                [],
+                params=params,
+                links_tpl=LinksTemplate(
+                    self.config.links_search, context={"args": params}
+                ),
+            )
+        except Exception as e:
+            raise e
