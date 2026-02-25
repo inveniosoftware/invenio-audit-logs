@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2025 CERN.
 # SPDX-FileCopyrightText: 2025 Graz University of Technology.
+# SPDX-FileCopyrightText: 2026 CESNET z.s.p.o.
 # SPDX-License-Identifier: MIT
 
 """Audit Logs Service API."""
@@ -67,6 +68,15 @@ class AuditLogService(RecordService):
             **data,
         )
 
+        self.run_components(
+            "create",
+            identity,
+            data=data,
+            record=record,
+            errors=errors,
+            uow=uow,
+        )
+
         # Persist record (DB and index)
         uow.register(AuditRecordCommitOp(record, self.indexer))
 
@@ -89,6 +99,12 @@ class AuditLogService(RecordService):
 
         # Read the record
         log = self.record_cls.get_record(id_=id_)
+
+        self.run_components(
+            "read",
+            identity,
+            record=log,
+        )
 
         # Return the result
         return self.result_item(
