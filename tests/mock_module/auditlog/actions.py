@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2025 CERN.
+# Copyright (C) 2025-2026 CERN.
 #
 # Invenio-Audit-Logs is free software; you can redistribute it and/or
 # modify it under the terms of the MIT License; see LICENSE file for more
@@ -8,7 +8,11 @@
 
 """Action registration via entrypoint function."""
 
+import marshmallow as ma
+
 from invenio_audit_logs.services import AuditLogAction
+
+from .context import RecordContext, UserContext
 
 
 class DraftCreateAuditLog(AuditLogAction):
@@ -19,12 +23,21 @@ class DraftCreateAuditLog(AuditLogAction):
 
     message_template = ("User {user_id} created the draft {resource_id}.",)
 
-    def resolve_context(self, data, **kwargs):
-        """Resolve the context using the provided data."""
-        # This is just a placeholder implementation.
-        data["user"] = dict(
-            id="1",
-            username="User",
-            email="current@inveniosoftware.org",
-        )
-        return data
+    context = [
+        UserContext(),
+    ]
+
+
+class RecordPublishAuditLog(DraftCreateAuditLog):
+    """Audit log for record publication."""
+
+    id = "record.publish"
+
+    message_template = ("User {user_id} published the record {resource_id}.",)
+
+    metadata_schema = {
+        "parent_pid": ma.fields.Str(required=True),
+        "revision_id": ma.fields.Int(required=True),
+    }
+
+    context = DraftCreateAuditLog.context + [RecordContext()]

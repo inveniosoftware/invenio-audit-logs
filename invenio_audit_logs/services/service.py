@@ -13,14 +13,20 @@ from datetime import datetime, timezone
 
 from invenio_records_resources.services.base.links import LinksTemplate
 from invenio_records_resources.services.records import RecordService
+from invenio_records_resources.services.records.schema import ServiceSchemaWrapper
 from invenio_records_resources.services.uow import unit_of_work
 from opensearchpy.exceptions import NotFoundError
 
+from ..proxies import current_audit_logs_actions_registry
 from .uow import AuditRecordCommitOp
 
 
 class AuditLogService(RecordService):
     """Audit log service layer."""
+
+    def _wrap_schema(self, schema):
+        """Wrap schema."""
+        return ServiceSchemaWrapper(self, schema=schema)
 
     @unit_of_work()
     def create(self, identity, data, raise_errors=True, uow=None):
@@ -40,8 +46,13 @@ class AuditLogService(RecordService):
         if "created" not in data:
             data["created"] = datetime.now(timezone.utc).isoformat()
 
+        # Dynamically load schema for metadata received from .build() method
+        action_obj = current_audit_logs_actions_registry.get(data["action"])
+        marshmallow_schema = action_obj.marshmallow_schema()
+
         # Validate data, action, resource_type and create record with id
-        data, errors = self.schema.load(
+        schema = self._wrap_schema(schema=marshmallow_schema)
+        data, errors = schema.load(
             data,
             context={
                 "identity": identity,

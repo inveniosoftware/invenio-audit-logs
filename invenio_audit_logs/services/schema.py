@@ -11,7 +11,7 @@
 
 from datetime import datetime
 
-from marshmallow import EXCLUDE, Schema, fields, pre_dump, pre_load
+from marshmallow import EXCLUDE, RAISE, Schema, fields, pre_dump, pre_load
 
 
 class ResourceSchema(Schema):
@@ -37,38 +37,7 @@ class MetadataSchema(Schema):
     class Meta:
         """Meta class to ignore unknown fields."""
 
-        unknown = EXCLUDE  # Ignore unknown fields
-
-    ip_address = fields.Str(
-        required=False,
-        metadata={
-            "description": "IP address of the client.",
-        },
-    )
-    session = fields.Str(
-        required=False,
-        metadata={
-            "description": "Session identifier.",
-        },
-    )
-    request_id = fields.Str(
-        required=False,
-        metadata={
-            "description": "Unique identifier for the request.",
-        },
-    )
-    parent_pid = fields.Str(
-        required=False,
-        metadata={
-            "description": "Record Parent ID.",
-        },
-    )
-    revision_id = fields.Int(
-        required=False,
-        metadata={
-            "description": "Record revision id.",
-        },
-    )
+        unknown = RAISE  # Raise on unknown fields
 
 
 class UserSchema(Schema):

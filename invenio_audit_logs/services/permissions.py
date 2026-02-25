@@ -20,3 +20,4 @@ class AuditLogPermissionPolicy(BasePermissionPolicy):
     can_read = [Administration(), SystemProcess()]
     can_update = [Disable()]
     can_delete = [Disable()]
+    can_create_or_update_many = [Disable()]

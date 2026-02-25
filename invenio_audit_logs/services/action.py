@@ -8,7 +8,10 @@
 
 """Audit log data building utils."""
 
+import marshmallow as ma
 from flask import current_app
+
+from .schema import AuditLogSchema, MetadataSchema
 
 
 class AuditLogAction:
@@ -18,6 +21,9 @@ class AuditLogAction:
 
     id = None
     resource_type = None
+
+    metadata_schema = None
+    metadata_required = True
 
     message_template = None
 
@@ -40,6 +46,21 @@ class AuditLogAction:
         """Resolve the context using the provided data."""
         for context in self.context:
             context(data, **kwargs)
+
+    @classmethod
+    def marshmallow_schema(cls):
+        """Create the entire audit log schema with the dynamically created metadata schema."""
+        additional_fields = {}
+        if cls.metadata_schema is not None:
+            additional_fields["metadata"] = ma.fields.Nested(
+                MetadataSchema.from_dict(cls.metadata_schema),
+                required=cls.metadata_required,
+                # load_only=True, # Load only fields for DB insert as we can't override on dumping
+                unknown=ma.EXCLUDE,  # Ignore unknown fields
+            )
+
+        # Dynamically create a schema from the additional metadata fields defined
+        return AuditLogSchema.from_dict(additional_fields)
 
     def render_message(self, data):
         """Render the message using the provided data."""

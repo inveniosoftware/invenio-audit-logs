@@ -35,5 +35,6 @@ def extra_entry_points():
     return {
         "invenio_audit_logs.actions": [
             "draft.create = mock_module.auditlog.actions:DraftCreateAuditLog",
+            "record.publish = mock_module.auditlog.actions:RecordPublishAuditLog",
         ]
     }

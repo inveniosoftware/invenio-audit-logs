@@ -49,3 +49,6 @@ class AuditLog(Record):
     resource_type = ModelField("resource_type", dump=False, dump_type=str)
 
     resource = DictField("resource")
+
+    #: Metadata system field. Overrides clear_none from base class to allow empty values.
+    metadata = DictField(clear_none=False, create_if_missing=True)

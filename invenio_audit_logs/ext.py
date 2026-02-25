@@ -7,6 +7,8 @@
 
 """Module providing audit logging features for Invenio.."""
 
+import warnings
+
 from invenio_base.utils import entry_points
 
 from . import config
@@ -35,6 +37,12 @@ class InvenioAuditLogs(object):
         for k in dir(config):
             if k.startswith("AUDIT_LOGS_"):
                 app.config.setdefault(k, getattr(config, k))
+        if "AUDIT_LOGS_METADATA_FIELDS" in app.config:
+            warnings.warn(
+                "AUDIT_LOGS_METADATA_FIELDS is deprecated and will be removed in a future version.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
     def init_services(self, app):
         """Initialize services."""

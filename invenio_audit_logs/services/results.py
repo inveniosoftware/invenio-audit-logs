@@ -11,6 +11,8 @@ from collections.abc import Iterable, Sized
 
 from invenio_records_resources.services.records.results import RecordItem, RecordList
 
+from ..proxies import current_audit_logs_actions_registry
+
 
 class AuditLogItem(RecordItem):
     """Single item result."""
@@ -22,7 +24,6 @@ class AuditLogItem(RecordItem):
         audit_log,
         errors=None,
         links_tpl=None,
-        schema=None,
     ):
         """Constructor."""
         self._data = None
@@ -31,7 +32,6 @@ class AuditLogItem(RecordItem):
         self._record = audit_log
         self._service = service
         self._links_tpl = links_tpl
-        self._schema = schema or service.schema
 
     @property
     def id(self):
@@ -44,7 +44,9 @@ class AuditLogItem(RecordItem):
         if self._data:
             return self._data
 
-        self._data = self._schema.dump(
+        action = current_audit_logs_actions_registry.get(self._record.action)
+        schema = self._service._wrap_schema(schema=action.marshmallow_schema())
+        self._data = schema.dump(
             self._obj,
             context={
                 "identity": self._identity,
@@ -83,8 +85,11 @@ class AuditLogList(RecordList):
     def hits(self):
         """Iterator over the hits."""
         for hit in self.items:
-            # Project the hit
-            projection = self._schema.dump(
+            # Get the appropriate schema based on the action from the registry
+            action = current_audit_logs_actions_registry.get(hit.action)
+            schema = self._service._wrap_schema(schema=action.marshmallow_schema())
+            # Project the hit using the appropriate schema based on the action
+            projection = schema.dump(
                 hit,
                 context=dict(identity=self._identity, record=hit),
             )

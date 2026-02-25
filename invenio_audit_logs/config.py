@@ -55,11 +55,5 @@ AUDIT_LOGS_SORT_OPTIONS = {
 AUDIT_LOGS_ENABLED = False
 """Feature flag. Disabled by default due to experimental nature of the APIs. Feature is not fully stable."""
 
-AUDIT_LOGS_METADATA_FIELDS = {
-    "revision_id": True,
-    "parent_pid": True,
-    "ip_address": True,
-    "session": True,
-    "request_id": False,
-}
-"""Metadata fields to be included in the audit log."""
+AUDIT_LOGS_METADATA_FIELDS = {}
+"""[DEPRECATED] Metadata fields to be included in the audit log."""
