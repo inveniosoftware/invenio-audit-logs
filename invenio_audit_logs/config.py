@@ -26,10 +26,7 @@ AUDIT_LOGS_FACETS = {
         facet=TermsFacet(
             field="resource.type",
             label="Resource",
-            value_labels={
-                "record": "Record",
-                "community": "Community",
-            },
+            value_labels=lambda keys: {k: k.capitalize() for k in keys},
         ),
         ui=dict(field="resource.type"),
     ),
@@ -37,9 +34,6 @@ AUDIT_LOGS_FACETS = {
         facet=TermsFacet(
             field="action",
             label="Action",
-            value_labels=lambda keys: {
-                k: current_audit_logs_actions_registry[k].id for k in keys
-            },
         ),
         ui=dict(field="action"),
     ),
@@ -54,6 +48,3 @@ AUDIT_LOGS_SORT_OPTIONS = {
 
 AUDIT_LOGS_ENABLED = False
 """Feature flag. Disabled by default due to experimental nature of the APIs. Feature is not fully stable."""
-
-AUDIT_LOGS_METADATA_FIELDS = {}
-"""[DEPRECATED] Metadata fields to be included in the audit log."""

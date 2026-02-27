@@ -55,7 +55,6 @@ class AuditLogAction:
             additional_fields["metadata"] = ma.fields.Nested(
                 MetadataSchema.from_dict(cls.metadata_schema),
                 required=cls.metadata_required,
-                # load_only=True, # Load only fields for DB insert as we can't override on dumping
                 unknown=ma.EXCLUDE,  # Ignore unknown fields
             )
 

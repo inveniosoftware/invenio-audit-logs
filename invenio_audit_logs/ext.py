@@ -60,7 +60,9 @@ class InvenioAuditLogs(object):
     def load_actions_registry(self):
         """Action loading registry."""
         self.actions_registry = {}
+        self.schema_cache = {}
         for ep in entry_points(group="invenio_audit_logs.actions"):
             action = ep.load()
             action_name = action.id
             self.actions_registry[action_name] = action
+            self.schema_cache[action_name] = action.marshmallow_schema()

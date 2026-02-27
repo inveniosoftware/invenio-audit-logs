@@ -50,16 +50,7 @@ class AuditLogSearchOptions(SearchOptionsBase):
     sort_default_no_query = "newest"
 
     query_parser_cls = QueryParser.factory(
-        fields=[
-            "id",
-            "action",
-            "user.id",
-            "user.username",
-            "user.email",
-            "user.email.keyword",
-            "resource.id",
-            "resource.type",
-        ]
+        fields=["*"],  # Make all fields including dynamic metadata fields searchable
     )
 
     sort_options = {
@@ -72,14 +63,11 @@ class AuditLogSearchOptions(SearchOptionsBase):
         "resource": TermsFacet(
             field="resource.type",
             label="Resource",
-            value_labels={"record": "Record", "community": "Community"},
+            value_labels=lambda keys: {k: k.capitalize() for k in keys},
         ),
         "action_name": TermsFacet(
             field="action",
             label="Action",
-            value_labels=lambda keys: {
-                k: current_audit_logs_actions_registry[k].id for k in keys
-            },
         ),
     }
 

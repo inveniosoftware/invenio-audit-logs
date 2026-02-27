@@ -17,16 +17,22 @@ from invenio_records_resources.services.records.schema import ServiceSchemaWrapp
 from invenio_records_resources.services.uow import unit_of_work
 from opensearchpy.exceptions import NotFoundError
 
-from ..proxies import current_audit_logs_actions_registry
+from ..proxies import (
+    current_audit_logs_schema_cache,
+)
 from .uow import AuditRecordCommitOp
 
 
 class AuditLogService(RecordService):
     """Audit log service layer."""
 
-    def _wrap_schema(self, schema):
-        """Wrap schema."""
-        return ServiceSchemaWrapper(self, schema=schema)
+    def _get_schema(self, action):
+        """Wrap schema for the action."""
+        marshmallow_schema = current_audit_logs_schema_cache.get(
+            action, self.config.schema
+        )
+        # If the schema is not registered for the action, fallback to the default schema
+        return ServiceSchemaWrapper(self, schema=marshmallow_schema)
 
     @unit_of_work()
     def create(self, identity, data, raise_errors=True, uow=None):
@@ -47,11 +53,7 @@ class AuditLogService(RecordService):
             data["created"] = datetime.now(timezone.utc).isoformat()
 
         # Dynamically load schema for metadata received from .build() method
-        action_obj = current_audit_logs_actions_registry.get(data["action"])
-        marshmallow_schema = action_obj.marshmallow_schema()
-
-        # Validate data, action, resource_type and create record with id
-        schema = self._wrap_schema(schema=marshmallow_schema)
+        schema = self._get_schema(action=data["action"])
         data, errors = schema.load(
             data,
             context={
@@ -59,7 +61,7 @@ class AuditLogService(RecordService):
             },
             raise_errors=raise_errors,
         )
-
+        # Validate data, action, resource_type and create record with id
         record = self.record_cls.create(
             {},
             **data,

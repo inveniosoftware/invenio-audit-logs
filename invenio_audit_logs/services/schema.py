@@ -11,7 +11,7 @@
 
 from datetime import datetime
 
-from marshmallow import EXCLUDE, RAISE, Schema, fields, pre_dump, pre_load
+from marshmallow import EXCLUDE, Schema, fields, pre_dump, pre_load
 
 
 class ResourceSchema(Schema):
@@ -37,7 +37,7 @@ class MetadataSchema(Schema):
     class Meta:
         """Meta class to ignore unknown fields."""
 
-        unknown = RAISE  # Raise on unknown fields
+        unknown = EXCLUDE  # Ignore unknown fields
 
 
 class UserSchema(Schema):

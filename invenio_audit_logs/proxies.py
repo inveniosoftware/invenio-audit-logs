@@ -24,3 +24,8 @@ current_audit_logs_resolvers = LocalProxy(
     lambda: current_app.extensions["invenio-audit-logs"].entity_resolvers
 )
 """Proxy to an instance of ``AuditLogs`` entity resolver registry."""
+
+current_audit_logs_schema_cache = LocalProxy(
+    lambda: current_app.extensions["invenio-audit-logs"].schema_cache
+)
+"""Proxy to an instance of ``AuditLogs`` schema cache."""

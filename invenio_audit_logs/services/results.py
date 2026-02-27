@@ -11,8 +11,6 @@ from collections.abc import Iterable, Sized
 
 from invenio_records_resources.services.records.results import RecordItem, RecordList
 
-from ..proxies import current_audit_logs_actions_registry
-
 
 class AuditLogItem(RecordItem):
     """Single item result."""
@@ -44,8 +42,7 @@ class AuditLogItem(RecordItem):
         if self._data:
             return self._data
 
-        action = current_audit_logs_actions_registry.get(self._record.action)
-        schema = self._service._wrap_schema(schema=action.marshmallow_schema())
+        schema = self._service._get_schema(action=self._record.action)
         self._data = schema.dump(
             self._obj,
             context={
@@ -86,8 +83,7 @@ class AuditLogList(RecordList):
         """Iterator over the hits."""
         for hit in self.items:
             # Get the appropriate schema based on the action from the registry
-            action = current_audit_logs_actions_registry.get(hit.action)
-            schema = self._service._wrap_schema(schema=action.marshmallow_schema())
+            schema = self._service._get_schema(action=hit.action)
             # Project the hit using the appropriate schema based on the action
             projection = schema.dump(
                 hit,
