@@ -47,13 +47,18 @@ class AuditLogService(RecordService):
             # don't create log if feature disabled
             return
 
+        action = data["action"]
+        if action in self.config.disabled_actions:
+            # use config flag to opt out of certain audit actions as required
+            return
+
         self.require_permission(identity, "create")
 
         if "created" not in data:
             data["created"] = datetime.now(timezone.utc).isoformat()
 
         # Dynamically load schema for metadata received from .build() method
-        schema = self._get_schema(action=data["action"])
+        schema = self._get_schema(action=action)
         data, errors = schema.load(
             data,
             context={

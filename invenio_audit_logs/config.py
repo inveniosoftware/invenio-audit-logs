@@ -47,4 +47,14 @@ AUDIT_LOGS_SORT_OPTIONS = {
 """Sort options for audit logs."""
 
 AUDIT_LOGS_ENABLED = False
-"""Feature flag. Disabled by default due to experimental nature of the APIs. Feature is not fully stable."""
+"""Feature flag. Disabled by default."""
+
+AUDIT_LOGS_DISABLED_ACTIONS = set()
+"""
+Disabled actions to be excluded from the audit logs.
+To find all the available actions, check the entry points in the `invenio_audit_logs.actions` group.
+```python
+>>> from invenio_base.utils import entry_points
+>>> [ep.name for ep in entry_points(group="invenio_audit_logs.actions")]
+```
+"""

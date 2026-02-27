@@ -107,3 +107,28 @@ def test_audit_log_create_system_identity(app, service, system_user, resource_da
         params={"q": "user.id: system AND action: draft.create"},
     )
     assert search_result.total == 1
+
+
+def test_audit_log_config_disabled(
+    app, service, resource_data, system_user, monkeypatch
+):
+    """Should succeed when config is set."""
+    monkeypatch.setitem(app.config, "AUDIT_LOGS_ENABLED", False)
+    resource_data["user"] = system_user
+    with app.test_request_context():
+        result = service.create(
+            identity=system_identity,
+            data=resource_data,
+        )
+    assert result is None
+
+    monkeypatch.setitem(app.config, "AUDIT_LOGS_ENABLED", True)
+    monkeypatch.setitem(
+        app.config, "AUDIT_LOGS_DISABLED_ACTIONS", set(["draft.create"])
+    )
+    with app.test_request_context():
+        result = service.create(
+            identity=system_identity,
+            data=resource_data,
+        )
+    assert result is None
