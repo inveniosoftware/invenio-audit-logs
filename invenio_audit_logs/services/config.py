@@ -22,6 +22,7 @@ from invenio_records_resources.services.records.params import (
     QueryStrParam,
     SortParam,
 )
+from invenio_records_resources.services.records.params.base import ParamInterpreter
 from invenio_records_resources.services.records.queryparser import QueryParser
 
 from ..proxies import current_audit_logs_actions_registry
@@ -29,6 +30,17 @@ from ..records import AuditLog
 from . import results
 from .permissions import AuditLogPermissionPolicy
 from .schema import AuditLogSchema
+
+
+class ActionParam(ParamInterpreter):
+    """Evaluates the 'action' parameter."""
+
+    def apply(self, identity, search, params):
+        """Filter by action field."""
+        value = params.pop("action", None)
+        if value is not None:
+            search = search.filter("term", **{"action": value})
+        return search
 
 
 class AuditLogSearchOptions(SearchOptionsBase):
@@ -74,6 +86,7 @@ class AuditLogSearchOptions(SearchOptionsBase):
     pagination_options = {"default_results_per_page": 20, "default_max_results": 1000}
 
     params_interpreters_cls = [
+        ActionParam,
         QueryStrParam,
         SortParam,
         PaginationParam,
