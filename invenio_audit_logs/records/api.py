@@ -33,7 +33,7 @@ class AuditLog(Record):
     )
     """Search dumper with configured dump keys."""
 
-    index = IndexField("auditlog-audit-log-v1.0.0", search_alias="auditlog")
+    index = IndexField("auditlog-audit-log-v2.0.0", search_alias="auditlog")
     """The search engine index to use."""
 
     id = ModelField("id", dump_type=UUID)
