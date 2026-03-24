@@ -1,0 +1,73 @@
+{
+  "index_patterns": ["__SEARCH_INDEX_PREFIX__auditlog*"],
+  "priority": 1,
+  "data_stream": {},
+  "template": {
+    "settings": {
+      "analysis": {
+        "filter": {
+          "lowercase": {
+            "type": "lowercase",
+            "preserve_original": true
+          },
+          "edgegrams": {
+            "type": "edge_ngram",
+            "min_gram": 2,
+            "max_gram": 20
+          }
+        },
+        "analyzer": {
+          "edge_analyzer": {
+            "tokenizer": "uax_url_email",
+            "type": "custom",
+            "filter": [
+              "lowercase",
+              "edgegrams"
+            ]
+          }
+        }
+      }
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "numeric_detection": false,
+      "properties": {
+        "id": { "type": "keyword" },
+        "uuid": { "type": "keyword" },
+        "version_id": { "type": "integer" },
+        "action": { "type": "keyword" },
+        "resource": {
+          "properties": {
+            "id": { "type": "keyword" },
+            "type": { "type": "keyword" }
+          }
+        },
+        "message": { "type": "text" },
+        "user": {
+          "properties": {
+            "id": { "type": "keyword" },
+            "username": { "type": "keyword" },
+            "email": {
+              "type": "text",
+              "analyzer": "edge_analyzer",
+              "search_analyzer": "standard",
+              "fields": {
+                "keyword": {
+                  "type": "keyword"
+                }
+              }
+            }
+          }
+        },
+        "metadata": {
+          "type": "flat_object"
+        },
+        "updated": { "type": "date" }
+      }
+    },
+    "aliases": {
+      "__SEARCH_INDEX_PREFIX__auditlog": {},
+      "__SEARCH_INDEX_PREFIX__audit-log": {}
+    }
+  }
+}
