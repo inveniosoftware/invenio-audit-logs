@@ -11,8 +11,18 @@
 import marshmallow as ma
 
 from invenio_audit_logs.services import AuditLogAction
+from invenio_audit_logs.services.schema import ResourceSchema
 
 from .context import RecordContext, UserContext
+
+
+class PublishingInfoSchema(ma.Schema):
+    """Publishing information schema."""
+
+    title = ma.fields.Str(required=True)
+    created = ma.fields.Str(
+        required=True
+    )  # SQLalchemy JSON field does not support DateTime during serialization
 
 
 class DraftCreateAuditLog(AuditLogAction):
@@ -36,8 +46,18 @@ class RecordPublishAuditLog(DraftCreateAuditLog):
     message_template = ("User {user_id} published the record {resource_id}.",)
 
     metadata_schema = {
-        "parent_pid": ma.fields.Str(required=True),
+        "related_to": ma.fields.Nested(
+            ResourceSchema,
+            required=True,
+        ),
         "revision_id": ma.fields.Int(required=True),
+        "publishing_info": ma.fields.Nested(
+            PublishingInfoSchema,
+            required=True,
+            metadata={
+                "description": "Publishing information.",
+            },
+        ),
     }
 
     context = DraftCreateAuditLog.context + [RecordContext()]

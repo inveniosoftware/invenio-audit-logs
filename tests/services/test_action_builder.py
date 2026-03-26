@@ -80,13 +80,29 @@ def test_audit_log_builder_with_metadata(
     assert result["resource"]["id"] == "efgh-5678"
     assert result["resource"]["type"] == "record"
     assert result["user"]["id"] == "1"
-    assert result["metadata"]["parent_pid"] == "parent-1234"
+    assert result["metadata"]["related_to"] == {"id": "parent-1234", "type": "parent"}
     assert result["metadata"]["revision_id"] == 9
+    assert result["metadata"]["publishing_info"] == {
+        "title": "Test Title",
+        "created": "2026-01-01T12:00:00+00:00",
+    }
 
     service.record_cls.index.refresh()
 
+    # Search by nested fields
     search_result = service.search(
         identity=system_identity,
-        params={"q": "metadata.parent_pid: parent-1234 AND metadata.revision_id: 9"},
+        params={
+            "q": "metadata.related_to.id:parent-1234 AND metadata.revision_id:9 AND metadata.publishing_info.created:[2025-12-25T00:00:00 TO 2026-01-05T12:00:00]"
+        },
     )
     assert search_result.total == 1
+
+    # Search using range queries inside the `flat_object`
+    search_result = service.search(
+        identity=system_identity,
+        params={
+            "q": "metadata.publishing_info.created:[2025-12-25T00:00:00 TO 2026-01-01T00:00:00]"
+        },
+    )
+    assert search_result.total == 0

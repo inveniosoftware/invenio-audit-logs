@@ -32,5 +32,10 @@ class RecordContext(object):
         revision_id = kwargs.get("revision_id")
         parent_pid = kwargs.get("parent_pid")
         dict_set(data, "metadata.revision_id", revision_id)
-        dict_set(data, "metadata.parent_pid", parent_pid)
+        dict_set(data, "metadata.related_to", {"id": parent_pid, "type": "parent"})
+        dict_set(
+            data,
+            "metadata.publishing_info",
+            {"title": "Test Title", "created": "2026-01-01T12:00:00+00:00"},
+        )
         return data
