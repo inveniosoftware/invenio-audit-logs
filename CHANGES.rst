@@ -9,7 +9,14 @@
 Changes
 =======
 
-Version v1.0.0 (released 2026-03-16)
+Version v2.0.0 (released 2026-04-02)
+
+- breaking change(mappings): define metadata as a flat_object instead of dynamic
+- feat(config): Add config flag to disable actions as required
+- refactor(results): Add global schema caching
+- breaking change(schema): Add support for dynamic metadata schema validation per action
+
+Version v1.1.0 (released 2026-03-16)
 
 - fix(service): Return empty result when documents are not indexed yet
 - feat(service): add action param to enable hidden filtering
