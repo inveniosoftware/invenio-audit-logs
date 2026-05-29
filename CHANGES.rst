@@ -9,6 +9,10 @@
 Changes
 =======
 
+Version v3.0.0 (released 2026-05-29)
+
+- chore(setup): bump dependencies
+
 Version v2.0.0 (released 2026-04-02)
 
 - breaking change(mappings): define metadata as a flat_object instead of dynamic
