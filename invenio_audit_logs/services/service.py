@@ -47,7 +47,7 @@ class AuditLogService(RecordService):
         # If an allow-list is set, only log actions that are on it.
         if enabled_actions is not None and action not in enabled_actions:
             return
-        # A disabled action is never logged, even if the allow-list includes it.
+        # Skip actions on the deny-list.
         if action in self.config.disabled_actions:
             return
 
