@@ -128,3 +128,33 @@ def test_audit_log_config_disabled(
             data=resource_data,
         )
     assert result is None
+
+
+def test_audit_log_enabled_actions_allow_list(
+    app, service, resource_data, system_user, monkeypatch
+):
+    """Allow-list opts in to specific actions only."""
+    resource_data["user"] = system_user
+
+    # Action not in the allow-list is skipped.
+    monkeypatch.setitem(
+        app.config, "AUDIT_LOGS_ENABLED_ACTIONS", set(["community.create"])
+    )
+    with app.test_request_context():
+        result = service.create(identity=system_identity, data=resource_data)
+    assert result is None
+
+    # Action in the allow-list is logged.
+    monkeypatch.setitem(app.config, "AUDIT_LOGS_ENABLED_ACTIONS", set(["draft.create"]))
+    with app.test_request_context():
+        result = service.create(identity=system_identity, data=resource_data)
+    assert result is not None
+    assert result["action"] == "draft.create"
+
+    # Deny-list wins over allow-list.
+    monkeypatch.setitem(
+        app.config, "AUDIT_LOGS_DISABLED_ACTIONS", set(["draft.create"])
+    )
+    with app.test_request_context():
+        result = service.create(identity=system_identity, data=resource_data)
+    assert result is None

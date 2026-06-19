@@ -43,8 +43,12 @@ class AuditLogService(RecordService):
             return
 
         action = data["action"]
+        enabled_actions = self.config.enabled_actions
+        # If an allow-list is set, only log actions that are on it.
+        if enabled_actions is not None and action not in enabled_actions:
+            return
+        # A disabled action is never logged, even if the allow-list includes it.
         if action in self.config.disabled_actions:
-            # use config flag to opt out of certain audit actions as required
             return
 
         self.require_permission(identity, "create")

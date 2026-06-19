@@ -82,6 +82,7 @@ class AuditLogServiceConfig(ServiceConfig, ConfiguratorMixin):
     """Audit log service configuration."""
 
     enabled = FromConfig("AUDIT_LOGS_ENABLED", default=True)
+    enabled_actions = FromConfig("AUDIT_LOGS_ENABLED_ACTIONS", default=None)
     disabled_actions = FromConfig("AUDIT_LOGS_DISABLED_ACTIONS", default=set())
 
     service_id = "audit-logs"
