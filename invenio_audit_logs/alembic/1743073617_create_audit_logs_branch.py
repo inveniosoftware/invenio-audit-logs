@@ -3,9 +3,6 @@
 
 """Create Audit logs branch."""
 
-import sqlalchemy as sa
-from alembic import op
-
 # revision identifiers, used by Alembic.
 revision = "1743073617"
 down_revision = None

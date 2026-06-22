@@ -45,6 +45,9 @@ invenio_audit_logs = "invenio_audit_logs:InvenioAuditLogs"
 [project.entry-points."invenio_base.blueprints"]
 invenio_audit_logs_ext = "invenio_audit_logs.views:blueprint"
 
+[project.entry-points."invenio_celery.tasks"]
+invenio_audit_logs = "invenio_audit_logs.tasks"
+
 [project.entry-points."invenio_db.alembic"]
 invenio_audit_logs = "invenio_audit_logs:alembic"
 

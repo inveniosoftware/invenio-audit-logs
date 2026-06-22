@@ -3,7 +3,6 @@
 """Test audit log service."""
 
 import pytest
-from flask import g
 from flask_login import login_user
 from invenio_access.permissions import system_identity
 from invenio_records_resources.services.errors import PermissionDeniedError
@@ -55,7 +54,7 @@ def test_audit_log_create(
     expected_links = {
         "self": (
             "https://127.0.0.1:5000/api/audit-logs/?"
-            f"page=1&q=resource.id:+abcd-1234+AND+action:+draft.create"
+            "page=1&q=resource.id:+abcd-1234+AND+action:+draft.create"
             "&size=20&sort=newest"
         )
     }
