@@ -63,14 +63,33 @@ def _delete_range(action, start, end, batch_size):
     return deleted
 
 
-def _delete_action(action, cutoff, batch_size):
-    """Delete expired events of ``action`` month by month.
+def _count_range(action, start, end):
+    """Count events of ``action`` with ``created`` in ``[start, end)``.
+
+    The dry-run counterpart to ``_delete_range``: it reads exactly the rows a real
+    run would delete, so the preview matches what enforcement removes.
+    """
+    return (
+        db.session.query(func.count(AuditLog.id))
+        .filter(
+            AuditLog.action == action,
+            AuditLog.created >= start,
+            AuditLog.created < end,
+        )
+        .scalar()
+    )
+
+
+def _expired_months(action, cutoff, batch_size, dry_run):
+    """Walk the expired months of ``action`` and report rows per month.
 
     Walks whole calendar months from the oldest expired event up to ``cutoff``,
-    which the resolver already snapped to a month boundary. Returns a list of
-    ``(month_start, rows_deleted)`` for the months that lost rows, so the caller
-    can record one retention run entry per deleted month, matching how the
-    partition-aware path will later operate on whole months.
+    which the resolver already snapped to a month boundary. A real run deletes each
+    month's rows in bounded batches; a dry run only counts them and touches
+    nothing. Returns a list of ``(month_start, rows)`` for the months with rows,
+    so the caller records one retention run entry per deleted month and reports the
+    same months in a dry run, matching how the partition-aware path will later
+    operate on whole months.
     """
     oldest = (
         db.session.query(func.min(AuditLog.created))
@@ -87,15 +106,18 @@ def _delete_action(action, cutoff, batch_size):
     month = _month_floor(oldest)
     while month < cutoff:
         following = _next_month(month)
-        deleted = _delete_range(action, month, following, batch_size)
-        if deleted:
-            per_month.append((month, deleted))
+        if dry_run:
+            rows = _count_range(action, month, following)
+        else:
+            rows = _delete_range(action, month, following, batch_size)
+        if rows:
+            per_month.append((month, rows))
         month = following
     return per_month
 
 
 @shared_task(ignore_result=True)
-def delete_expired_audit_logs():
+def delete_expired_audit_logs(dry_run=False):
     """Delete expired audit log events from PostgreSQL.
 
     For every action present in the table the resolver decides whether the action
@@ -104,8 +126,15 @@ def delete_expired_audit_logs():
     A single-run lock prevents overlapping runs, and the run is idempotent because
     a second pass finds nothing left past the cutoff.
 
-    Returns a mapping of action id to the number of rows deleted, or ``None`` when
-    another run holds the lock.
+    With ``dry_run`` the task counts what it would remove and reports it without
+    deleting any row or writing a run log entry, so an operator can validate a
+    policy change before enforcing it. The dry run reads the same months a real run
+    would, so its counts match what the next enforced run deletes.
+
+    Returns ``None`` when another run holds the lock. An enforced run returns a
+    mapping of action id to the total rows it deleted. A dry run returns a mapping
+    of action id to a per-month mapping of deleted month to the rows a real run
+    would delete.
     """
     lock = CachedMutex(LOCK_ID)
     try:
@@ -121,13 +150,16 @@ def delete_expired_audit_logs():
 
         actions = [row[0] for row in db.session.query(AuditLog.action).distinct().all()]
 
-        deleted = {}
+        report = {}
         for action in actions:
             if policy.is_kept_forever(action):
                 continue
             cutoff = policy.cutoff(action, now)
-            per_month = _delete_action(action, cutoff, batch_size)
+            per_month = _expired_months(action, cutoff, batch_size, dry_run)
             if not per_month:
+                continue
+            if dry_run:
+                report[action] = {month.date(): rows for month, rows in per_month}
                 continue
             retention_days = policy.period(action).days
             for month, deleted in per_month:
@@ -141,8 +173,9 @@ def delete_expired_audit_logs():
                         status="success",
                     )
                 )
-            deleted[action] = sum(deleted for _, deleted in per_month)
-        db.session.commit()
-        return deleted
+            report[action] = sum(deleted for _, deleted in per_month)
+        if not dry_run:
+            db.session.commit()
+        return report
     finally:
         lock.release()

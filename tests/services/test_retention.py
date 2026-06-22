@@ -6,6 +6,7 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from invenio_access.permissions import system_identity
 from invenio_cache.lock import CachedMutex
 from invenio_db import db
 
@@ -257,3 +258,81 @@ def test_run_log_persists_across_runs(app, seeded_events):
         assert deleted == {}
         assert {(run.action, run.month, run.rows_deleted) for run in _runs()} == first
         assert len(first) == 2
+
+
+def test_dry_run_reports_per_action_and_month(app, seeded_events):
+    """A dry run reports the expired rows broken down by action and month."""
+    with app.app_context():
+        now = datetime.now(UTC).replace(tzinfo=None)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        report = delete_expired_audit_logs(dry_run=True)
+
+        assert report == {
+            "user.login": {_months_before(month_start, 5).date(): 1},
+            "record.publish": {_months_before(month_start, 20).date(): 1},
+        }
+
+
+def test_dry_run_deletes_nothing_in_postgres(app, seeded_events):
+    """A dry run leaves every PostgreSQL row in place, expired or not."""
+    with app.app_context():
+        before = _remaining_ids()
+
+        delete_expired_audit_logs(dry_run=True)
+
+        assert _remaining_ids() == before
+        # Reporting only; nothing claims a run happened.
+        assert _runs() == []
+
+
+def test_dry_run_counts_match_real_run(app, seeded_events):
+    """The dry-run preview equals what the next enforced run actually deletes."""
+    with app.app_context():
+        report = delete_expired_audit_logs(dry_run=True)
+
+        deleted = delete_expired_audit_logs()
+
+        # Per-action totals reported by the dry run match the rows deleted.
+        assert deleted == {
+            action: sum(months.values()) for action, months in report.items()
+        }
+        # Per-month counts reported by the dry run match the run log entries.
+        assert {(run.action, run.month, run.rows_deleted) for run in _runs()} == {
+            (action, month, rows)
+            for action, months in report.items()
+            for month, rows in months.items()
+        }
+
+
+def test_dry_run_leaves_opensearch_searchable(app, service, resource_data):
+    """A dry run touches no OpenSearch document, so expired events stay indexed."""
+    with app.app_context():
+        now = datetime.now(UTC).replace(tzinfo=None)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        expired = _months_before(month_start, 20)
+
+        # Create the event through the service so it lands in OpenSearch too, then
+        # backdate the row in PostgreSQL. draft.create has no explicit period, so it
+        # falls under the 13-month default and a 20-month-old event is expired. The
+        # search index outlives a single test, so a unique resource id keeps this
+        # event from colliding with other tests' draft.create events.
+        resource_data["resource"]["id"] = "retention-dry-run"
+        with app.test_request_context():
+            service.create(identity=system_identity, data=resource_data)
+        db.session.query(AuditLog).update(
+            {AuditLog.created: expired, AuditLog.updated: expired}
+        )
+        db.session.commit()
+        service.record_cls.index.refresh()
+
+        report = delete_expired_audit_logs(dry_run=True)
+        assert report == {"draft.create": {expired.date(): 1}}
+
+        # The expired event is still in PostgreSQL and still searchable.
+        assert len(_remaining_ids()) == 1
+        found = service.search(
+            identity=system_identity,
+            params={"q": "resource.id: retention-dry-run AND action: draft.create"},
+        )
+        assert found.total == 1
