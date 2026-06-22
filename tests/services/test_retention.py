@@ -10,7 +10,7 @@ from invenio_cache.lock import CachedMutex
 from invenio_db import db
 
 from invenio_audit_logs import KEEP_FOREVER
-from invenio_audit_logs.records.models import AuditLog
+from invenio_audit_logs.records.models import AuditLog, RetentionRun
 from invenio_audit_logs.retention import RetentionPolicy
 from invenio_audit_logs.tasks import LOCK_ID, delete_expired_audit_logs
 
@@ -175,3 +175,85 @@ def test_delete_respects_single_run_lock(app, seeded_events):
 
         assert deleted is None
         assert _remaining_ids() == before
+
+
+def _runs():
+    """Return the retention run log entries, ordered for stable assertions."""
+    return (
+        db.session.query(RetentionRun)
+        .order_by(RetentionRun.action, RetentionRun.month)
+        .all()
+    )
+
+
+def test_run_log_records_each_deleted_month(app, seeded_events):
+    """One entry per deleted (action, month) carries its count, period, status."""
+    with app.app_context():
+        now = datetime.now(UTC).replace(tzinfo=None)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        delete_expired_audit_logs()
+
+        by_action = {run.action: run for run in _runs()}
+        assert set(by_action) == {"user.login", "record.publish"}
+
+        login = by_action["user.login"]
+        assert login.month == _months_before(month_start, 5).date()
+        assert login.rows_deleted == 1
+        assert login.retention_days == 60
+        assert login.status == "success"
+        assert isinstance(login.run_at, datetime)
+
+        publish = by_action["record.publish"]
+        assert publish.month == _months_before(month_start, 20).date()
+        assert publish.rows_deleted == 1
+        assert publish.retention_days == 395
+        assert publish.status == "success"
+
+
+def test_run_log_one_entry_per_month_per_action(app, db, retention_config):
+    """Expired rows of one action spread over months yield one entry each."""
+    with app.app_context():
+        now = datetime.now(UTC).replace(tzinfo=None)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        # Two rows in the same expired month, one in an older expired month.
+        _insert("user.login", _months_before(month_start, 4))
+        _insert("user.login", _months_before(month_start, 4) + timedelta(days=1))
+        _insert("user.login", _months_before(month_start, 6))
+
+        delete_expired_audit_logs()
+
+        logins = [run for run in _runs() if run.action == "user.login"]
+        assert {(run.month, run.rows_deleted) for run in logins} == {
+            (_months_before(month_start, 4).date(), 2),
+            (_months_before(month_start, 6).date(), 1),
+        }
+
+
+def test_run_log_holds_no_event_content():
+    """The run log table carries counts and status only, no event payload."""
+    assert set(RetentionRun.__table__.columns.keys()) == {
+        "id",
+        "run_at",
+        "action",
+        "retention_days",
+        "month",
+        "rows_deleted",
+        "status",
+    }
+
+
+def test_run_log_persists_across_runs(app, seeded_events):
+    """Entries survive the deletion and a later no-op run, proving enforcement."""
+    with app.app_context():
+        delete_expired_audit_logs()
+        first = {(run.action, run.month, run.rows_deleted) for run in _runs()}
+
+        # A second run deletes nothing, yet the earlier proof stays in its own
+        # table even though the audit rows it describes are gone.
+        deleted = delete_expired_audit_logs()
+
+        assert deleted == {}
+        assert {(run.action, run.month, run.rows_deleted) for run in _runs()} == first
+        assert len(first) == 2
