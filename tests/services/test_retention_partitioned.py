@@ -1,21 +1,19 @@
 # SPDX-FileCopyrightText: 2026 CERN.
 # SPDX-License-Identifier: MIT
 
-"""Retention against a monthly-partitioned ``audit_logs_metadata``.
+"""Retention on a month-partitioned ``audit_logs_metadata`` table.
 
-The default profile deletes scattered rows in batches; the scale profile lets an
-operator partition the table by month and the task then drops or rewrites whole
-cold partitions instead. Both profiles must reach the same end state, so these
-tests seed an operator-style partitioned table and assert the same survivors the
-batched path produces, plus that the rewrite touches only cold children.
+By default retention deletes old rows in batches. If an operator partitions the
+table by month, the task drops or rewrites whole old partitions instead. Both ways
+must end up with the same rows, so these tests set up a partitioned table and check
+that the kept rows match the batched version and that only old partitions are
+touched.
 
-The fixture partitions on ``created`` rather than the UUIDv7 id used by the
-prior-art ``test_partitioned_compatibility.py``. Until the id migration lands the
-model still issues uuid4 ids, which would fall outside any id-based partition
-range; partitioning on ``created`` matches how retention keys its cutoffs and
-keeps the task's partition handling agnostic to the partition key. The setup runs
-inside the test's own transaction, so the savepoint-based ``db`` fixture rolls the
-table back to a plain table after each test with no leakage.
+The table is partitioned by ``created``, not by the UUIDv7 id, because the tests
+insert rows with old ``created`` times while their ids are generated at insert time.
+Partitioning by ``created`` puts each row in the right month. ``partition_audit_table``
+builds the table from the model, so only the monthly ranges are here. The setup runs
+in the test's transaction, so the table goes back to normal after each test.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -79,11 +77,11 @@ def _partition_names():
 
 @pytest.fixture()
 def retention_config(set_app_config_fn_scoped):
-    """Two-month logins, kept-forever blocks, 13-month default.
+    """Logins kept 2 months, blocks kept forever, everything else 13 months.
 
-    ``draft.create`` is kept forever too: it is a registered action, so it can
-    stand as a survivor that the OpenSearch rebuild reindexes from PostgreSQL,
-    which an unregistered action could not.
+    ``draft.create`` is kept forever too. It is a registered action, so it can be a
+    kept row that the OpenSearch rebuild reindexes from PostgreSQL; an unregistered
+    action could not.
     """
     set_app_config_fn_scoped(
         {
@@ -98,61 +96,37 @@ def retention_config(set_app_config_fn_scoped):
 
 
 @pytest.fixture()
-def partitioned_table(app, db, retention_config):
-    """Convert ``audit_logs_metadata`` to a monthly-partitioned table.
+def partitioned_table(app, db, retention_config, partition_audit_table):
+    """Partition ``audit_logs_metadata`` by ``created``, one child per month.
 
-    Mirrors what an operator would set up with tooling such as ``pg_partman``:
-    drop the plain table and recreate it ranged by ``created``, with one child per
-    month from two years back through next month. The current and next months
-    cover live ingestion; the older children are the cold partitions retention
-    operates on. PostgreSQL requires the range key in the primary key, so the key
-    becomes ``(id, created)``; the SQLAlchemy model keeps its single-column id key
-    and never sees this.
+    Like what an operator would set up with a tool such as ``pg_partman``: one child
+    per month from two years back to next month. The current and next months take
+    new rows; the older ones are what retention works on. ``partition_audit_table``
+    builds the table from the model, so only the monthly ranges are here. PostgreSQL
+    needs the partition key in the primary key, so it becomes ``(id, created)``; the
+    model keeps its single id key and never sees this.
     """
-    if db.engine.name != "postgresql":
-        pytest.skip("Partitioning only runs on PostgreSQL")
-
     with app.app_context():
         now = datetime.now(UTC).replace(tzinfo=None)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-        db.session.execute(text("DROP TABLE audit_logs_metadata"))
-        db.session.execute(
-            text(
-                """
-                CREATE TABLE audit_logs_metadata (
-                    id UUID NOT NULL,
-                    created TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-                    updated TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-                    action VARCHAR(255) NOT NULL,
-                    resource_type VARCHAR(255) NOT NULL,
-                    user_id VARCHAR(255) NOT NULL,
-                    json JSONB,
-                    version_id INTEGER NOT NULL,
-                    PRIMARY KEY (id, created)
-                ) PARTITION BY RANGE (created)
-                """
-            )
-        )
+        children = {}
         for n in range(24, -2, -1):
             start = _months_before(month_start, n)
             end = _next_month(start)
             name = f"audit_logs_metadata_y{start.year}_m{start.month:02d}"
-            db.session.execute(
-                text(
-                    f"CREATE TABLE {name} PARTITION OF audit_logs_metadata "
-                    f"FOR VALUES FROM ('{start:%Y-%m-%d}') TO ('{end:%Y-%m-%d}')"
-                )
-            )
-        db.session.commit()
+            children[name] = (f"{start:%Y-%m-%d}", f"{end:%Y-%m-%d}")
+        partition_audit_table(
+            "RANGE (created)", children, primary_key=("id", "created")
+        )
         yield month_start
 
 
 def test_fully_expired_partition_is_emptied(app, partitioned_table):
-    """A cold month whose every row is expired is cleared down to nothing."""
+    """An old month where every row has expired is emptied."""
     with app.app_context():
         month_start = partitioned_table
-        # 20 months old, only default-retention actions: the whole month expires.
+        # 20 months old with only default-retention actions, so the whole month goes.
         expired_month = _months_before(month_start, 20)
         a = _insert("record.publish", expired_month)
         b = _insert("record.publish", expired_month + timedelta(days=3))
@@ -167,7 +141,7 @@ def test_fully_expired_partition_is_emptied(app, partitioned_table):
 
         assert deleted == {"record.publish": 2}
         assert _remaining_ids() == set()
-        # The partition is truncated, not dropped: it survives for future writes.
+        # The partition is emptied, not dropped, so it can still take new rows.
         assert partition in _partition_names()
         after = db.session.execute(text(f"SELECT count(*) FROM {partition}")).scalar()
         assert after == 0
@@ -175,21 +149,21 @@ def test_fully_expired_partition_is_emptied(app, partitioned_table):
 
 
 def test_partition_with_survivors_is_rewritten(app, partitioned_table):
-    """A cold month keeps its survivors and loses only its expired rows."""
+    """An old month keeps the rows that have not expired and drops the rest."""
     with app.app_context():
         month_start = partitioned_table
-        # Five months back: the login (two-month period) expires, the kept-forever
-        # creation survives, so the cold child must be rewritten down to it.
-        cold_month = _months_before(month_start, 5)
-        expired_login = _insert("user.login", cold_month)
-        kept = _insert("draft.create", cold_month + timedelta(days=2))
+        # Five months back: the login (kept 2 months) expires; the kept-forever
+        # create stays, so the partition is rewritten down to it.
+        old_month = _months_before(month_start, 5)
+        expired_login = _insert("user.login", old_month)
+        kept = _insert("draft.create", old_month + timedelta(days=2))
 
-        partition = f"audit_logs_metadata_y{cold_month.year}_m{cold_month.month:02d}"
+        partition = f"audit_logs_metadata_y{old_month.year}_m{old_month.month:02d}"
 
         deleted = delete_expired_audit_logs()
 
         assert deleted == {"user.login": 1}
-        # The survivor stays, with its original id, in the same partition.
+        # The kept row stays, with its original id, in the same partition.
         assert _remaining_ids() == {kept}
         assert expired_login not in _remaining_ids()
         held = db.session.execute(text(f"SELECT id::text FROM {partition}")).fetchall()
@@ -197,7 +171,7 @@ def test_partition_with_survivors_is_rewritten(app, partitioned_table):
 
 
 def test_current_partition_is_untouched(app, partitioned_table):
-    """The hot current month is never read or rewritten by the task."""
+    """The current month is never read or rewritten by the task."""
     with app.app_context():
         month_start = partitioned_table
         now = datetime.now(UTC).replace(tzinfo=None)
@@ -222,11 +196,11 @@ def test_current_partition_is_untouched(app, partitioned_table):
 
 
 def test_partitioned_matches_default_outcome(app, partitioned_table):
-    """The partitioned profile leaves the same survivors as the batched path.
+    """The partitioned table ends with the same rows as the batched delete.
 
-    The seed and expected survivors match ``test_deletes_only_expired`` in
-    ``test_retention.py``, which runs the batched DELETE on a plain table. Equal
-    survivors and an equal report show the two profiles share retention semantics.
+    The setup and expected kept rows match ``test_deletes_only_expired`` in
+    ``test_retention.py``, which runs the batched delete on a plain table. Same rows
+    kept and same report means both ways behave the same.
     """
     with app.app_context():
         month_start = partitioned_table
@@ -250,23 +224,23 @@ def test_partitioned_matches_default_outcome(app, partitioned_table):
 
 
 def test_partitioned_run_is_idempotent(app, partitioned_table):
-    """A second partitioned run drops nothing and keeps the survivors."""
+    """Running it again deletes nothing and keeps the same rows."""
     with app.app_context():
         month_start = partitioned_table
         _insert("user.login", _months_before(month_start, 5))
         _insert("user.block", _months_before(month_start, 10))
 
         delete_expired_audit_logs()
-        survivors = _remaining_ids()
+        kept = _remaining_ids()
 
         deleted = delete_expired_audit_logs()
 
         assert deleted == {}
-        assert _remaining_ids() == survivors
+        assert _remaining_ids() == kept
 
 
 def test_partitioned_run_log_records_each_month(app, partitioned_table):
-    """One run-log entry per deleted month, matching the batched profile."""
+    """One run-log entry per deleted month, same as the batched version."""
     with app.app_context():
         month_start = partitioned_table
         _insert("user.login", _months_before(month_start, 4))
