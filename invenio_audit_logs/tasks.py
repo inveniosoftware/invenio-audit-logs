@@ -9,8 +9,9 @@ from celery import shared_task
 from flask import current_app
 from invenio_cache.lock import CachedMutex, LockAcquireFailed
 from invenio_db import db
+from sqlalchemy import func
 
-from .records.models import AuditLog
+from .records.models import AuditLog, RetentionRun
 from .retention import RetentionPolicy
 
 LOCK_ID = "audit-logs-retention"
@@ -20,8 +21,20 @@ LOCK_TIMEOUT = 60 * 60 * 23
 """Lock lifetime in seconds, below the monthly cadence so a stale lock clears."""
 
 
-def _delete_action(action, cutoff, batch_size):
-    """Delete events of ``action`` created before ``cutoff`` in bounded batches.
+def _month_floor(dt):
+    """Return the first instant of ``dt``'s month."""
+    return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _next_month(dt):
+    """Return the first instant of the month after ``dt``."""
+    if dt.month == 12:
+        return dt.replace(year=dt.year + 1, month=1)
+    return dt.replace(month=dt.month + 1)
+
+
+def _delete_range(action, start, end, batch_size):
+    """Delete events of ``action`` with ``created`` in ``[start, end)``.
 
     Deletion keys on ``created`` rather than the id, so it is independent of the
     id version. Each batch commits on its own to keep locks and the write-ahead
@@ -32,7 +45,11 @@ def _delete_action(action, cutoff, batch_size):
         ids = [
             row[0]
             for row in db.session.query(AuditLog.id)
-            .filter(AuditLog.action == action, AuditLog.created < cutoff)
+            .filter(
+                AuditLog.action == action,
+                AuditLog.created >= start,
+                AuditLog.created < end,
+            )
             .limit(batch_size)
             .all()
         ]
@@ -44,6 +61,37 @@ def _delete_action(action, cutoff, batch_size):
         db.session.commit()
         deleted += len(ids)
     return deleted
+
+
+def _delete_action(action, cutoff, batch_size):
+    """Delete expired events of ``action`` month by month.
+
+    Walks whole calendar months from the oldest expired event up to ``cutoff``,
+    which the resolver already snapped to a month boundary. Returns a list of
+    ``(month_start, rows_deleted)`` for the months that lost rows, so the caller
+    can record one retention run entry per deleted month, matching how the
+    partition-aware path will later operate on whole months.
+    """
+    oldest = (
+        db.session.query(func.min(AuditLog.created))
+        .filter(AuditLog.action == action, AuditLog.created < cutoff)
+        .scalar()
+    )
+    if oldest is None:
+        return []
+    # The column reads back as UTC-aware; the cutoff and month walk are naive UTC.
+    if oldest.tzinfo is not None:
+        oldest = oldest.astimezone(timezone.utc).replace(tzinfo=None)
+
+    per_month = []
+    month = _month_floor(oldest)
+    while month < cutoff:
+        following = _next_month(month)
+        deleted = _delete_range(action, month, following, batch_size)
+        if deleted:
+            per_month.append((month, deleted))
+        month = following
+    return per_month
 
 
 @shared_task(ignore_result=True)
@@ -78,9 +126,23 @@ def delete_expired_audit_logs():
             if policy.is_kept_forever(action):
                 continue
             cutoff = policy.cutoff(action, now)
-            deleted = _delete_action(action, cutoff, batch_size)
-            if deleted:
-                deleted[action] = deleted
+            per_month = _delete_action(action, cutoff, batch_size)
+            if not per_month:
+                continue
+            retention_days = policy.period(action).days
+            for month, deleted in per_month:
+                db.session.add(
+                    RetentionRun(
+                        run_at=now,
+                        action=action,
+                        retention_days=retention_days,
+                        month=month.date(),
+                        rows_deleted=deleted,
+                        status="success",
+                    )
+                )
+            deleted[action] = sum(deleted for _, deleted in per_month)
+        db.session.commit()
         return deleted
     finally:
         lock.release()
