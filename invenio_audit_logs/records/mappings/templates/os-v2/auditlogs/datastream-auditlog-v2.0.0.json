@@ -1,7 +1,6 @@
 {
   "index_patterns": ["__SEARCH_INDEX_PREFIX__auditlog*"],
   "priority": 1,
-  "data_stream": {},
   "template": {
     "settings": {
       "analysis": {
@@ -32,6 +31,7 @@
       "dynamic": "strict",
       "numeric_detection": false,
       "properties": {
+        "@timestamp": { "type": "date" },
         "id": { "type": "keyword" },
         "uuid": { "type": "keyword" },
         "version_id": { "type": "integer" },

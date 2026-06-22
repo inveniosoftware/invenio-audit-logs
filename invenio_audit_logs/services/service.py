@@ -6,6 +6,7 @@
 
 from datetime import datetime, timezone
 
+from invenio_db import db
 from invenio_records_resources.services.base.links import LinksTemplate
 from invenio_records_resources.services.records import RecordService
 from invenio_records_resources.services.records.schema import ServiceSchemaWrapper
@@ -20,6 +21,33 @@ from .uow import AuditRecordCommitOp
 
 class AuditLogService(RecordService):
     """Audit log service layer."""
+
+    def record_to_index(self, record):
+        """Route each event to a monthly index derived from its ``created``.
+
+        The plain ``auditlog*`` template auto-creates ``auditlog-YYYY-MM`` on first
+        write and joins it to the ``auditlog`` read alias, so there is no write
+        alias and no rollover job. Keying on the timestamp means a survivor that is
+        reindexed during retention lands back in the month it belongs to.
+        """
+        return f"auditlog-{record.created:%Y-%m}"
+
+    def reindex(self, identity, uow=None):
+        """Rebuild the search copy from PostgreSQL into the monthly indices.
+
+        PostgreSQL is authoritative, so the move off the old data stream replays
+        every row through ``record_to_index`` into its ``auditlog-YYYY-MM`` index
+        rather than copying the stream. Returns the number of events reindexed.
+        """
+        self.require_permission(identity, "search")
+        indexer = self.indexer
+        count = 0
+        for (model_id,) in db.session.query(self.record_cls.model_cls.id).all():
+            indexer.index(self.record_cls.get_record(model_id))
+            count += 1
+        if count:
+            indexer.refresh()
+        return count
 
     def _get_schema(self, action):
         """Wrap schema for the action."""
