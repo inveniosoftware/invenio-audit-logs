@@ -1,0 +1,177 @@
+# SPDX-FileCopyrightText: 2026 CERN.
+# SPDX-License-Identifier: MIT
+
+"""Tests for audit log retention: resolver and the monthly DB delete."""
+
+from datetime import datetime, timedelta, timezone
+
+import pytest
+from invenio_cache.lock import CachedMutex
+from invenio_db import db
+
+from invenio_audit_logs import KEEP_FOREVER
+from invenio_audit_logs.records.models import AuditLog
+from invenio_audit_logs.retention import RetentionPolicy
+from invenio_audit_logs.tasks import LOCK_ID, delete_expired_audit_logs
+
+NOW = datetime(2026, 9, 15, 12, 30)
+UTC = timezone.utc
+
+
+@pytest.mark.parametrize(
+    "action, periods, default, expected",
+    [
+        # Explicit per-action period: 60 days -> two whole months.
+        (
+            "user.login",
+            {"user.login": timedelta(days=60)},
+            timedelta(days=395),
+            datetime(2026, 7, 1),
+        ),
+        # Default fallback: 395 days -> thirteen whole months.
+        (
+            "record.publish",
+            {},
+            timedelta(days=395),
+            datetime(2025, 8, 1),
+        ),
+        # Kept forever: no cutoff.
+        (
+            "user.block",
+            {"user.block": KEEP_FOREVER},
+            timedelta(days=395),
+            None,
+        ),
+    ],
+)
+def test_resolver_cutoff(action, periods, default, expected):
+    """Resolver returns kept-forever or a whole-month cutoff per action."""
+    policy = RetentionPolicy(periods, default)
+    assert policy.cutoff(action, NOW) == expected
+
+
+@pytest.mark.parametrize(
+    "now, period, expected",
+    [
+        # Crossing a year boundary backwards.
+        (datetime(2026, 1, 10), timedelta(days=60), datetime(2025, 11, 1)),
+        # End-of-month reference still snaps to the first of the month.
+        (datetime(2026, 3, 31, 23, 59), timedelta(days=90), datetime(2025, 12, 1)),
+        # One month back from December.
+        (datetime(2026, 12, 1), timedelta(days=30), datetime(2026, 11, 1)),
+    ],
+)
+def test_resolver_month_boundary(now, period, expected):
+    """The cutoff lands on a calendar-month boundary across year wraps."""
+    policy = RetentionPolicy({"action": period}, timedelta(days=395))
+    assert policy.cutoff("action", now) == expected
+
+
+def test_resolver_keep_forever_flag():
+    """is_kept_forever distinguishes the sentinel from a finite period."""
+    policy = RetentionPolicy({"user.block": KEEP_FOREVER}, timedelta(days=395))
+    assert policy.is_kept_forever("user.block") is True
+    assert policy.is_kept_forever("user.login") is False
+
+
+def _months_before(month_start, n):
+    """Return the start of the month ``n`` months before ``month_start``."""
+    total = month_start.year * 12 + (month_start.month - 1) - n
+    year, month = divmod(total, 12)
+    return month_start.replace(year=year, month=month + 1)
+
+
+def _insert(action, created):
+    """Insert an audit log row with a chosen ``created`` timestamp."""
+    row = AuditLog(
+        action=action,
+        resource_type="record",
+        user_id="1",
+        json={},
+        created=created,
+        updated=created,
+    )
+    db.session.add(row)
+    db.session.commit()
+    return row.id
+
+
+@pytest.fixture()
+def retention_config(set_app_config_fn_scoped):
+    """Two-month logins, kept-forever blocks, 13-month default."""
+    set_app_config_fn_scoped(
+        {
+            "AUDIT_LOGS_RETENTION": {
+                "user.login": timedelta(days=60),
+                "user.block": KEEP_FOREVER,
+            },
+            "AUDIT_LOGS_RETENTION_DEFAULT": timedelta(days=395),
+        }
+    )
+
+
+@pytest.fixture()
+def seeded_events(app, db, retention_config):
+    """Seed events across months and actions with mixed retention."""
+    with app.app_context():
+        now = datetime.now(UTC).replace(tzinfo=None)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        ids = {
+            # Past the two-month login cutoff -> expired.
+            "old_login": _insert("user.login", _months_before(month_start, 5)),
+            # Current month -> within period, kept.
+            "recent_login": _insert("user.login", now),
+            # Kept forever regardless of age.
+            "old_block": _insert("user.block", _months_before(month_start, 10)),
+            # Within the 13-month default -> kept.
+            "publish_recent": _insert("record.publish", _months_before(month_start, 5)),
+            # Past the 13-month default -> expired.
+            "publish_old": _insert("record.publish", _months_before(month_start, 20)),
+        }
+        yield ids
+
+
+def _remaining_ids():
+    """Return the set of ids currently in the table."""
+    return {row[0] for row in db.session.query(AuditLog.id).all()}
+
+
+def test_deletes_only_expired(app, seeded_events):
+    """Only events past their action's cutoff are deleted; the rest remain."""
+    with app.app_context():
+        deleted = delete_expired_audit_logs()
+
+        assert deleted == {"user.login": 1, "record.publish": 1}
+        assert _remaining_ids() == {
+            seeded_events["recent_login"],
+            seeded_events["old_block"],
+            seeded_events["publish_recent"],
+        }
+
+
+def test_delete_is_idempotent(app, seeded_events):
+    """A second run deletes nothing and leaves the survivors untouched."""
+    with app.app_context():
+        delete_expired_audit_logs()
+        survivors = _remaining_ids()
+
+        deleted = delete_expired_audit_logs()
+
+        assert deleted == {}
+        assert _remaining_ids() == survivors
+
+
+def test_delete_respects_single_run_lock(app, seeded_events):
+    """A held lock blocks the run, so nothing is deleted."""
+    with app.app_context():
+        before = _remaining_ids()
+        lock = CachedMutex(LOCK_ID)
+        lock.acquire(timeout=60)
+        try:
+            deleted = delete_expired_audit_logs()
+        finally:
+            lock.release()
+
+        assert deleted is None
+        assert _remaining_ids() == before
