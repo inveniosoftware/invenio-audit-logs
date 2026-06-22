@@ -11,7 +11,7 @@ from invenio_cache.lock import CachedMutex, LockAcquireFailed
 from invenio_db import db
 from invenio_search import current_search_client
 from invenio_search.utils import build_alias_name
-from sqlalchemy import and_, func, not_, or_
+from sqlalchemy import and_, bindparam, func, not_, or_, text
 
 from .proxies import current_audit_logs_service
 from .records.models import AuditLog, RetentionRun
@@ -185,15 +185,132 @@ def _expired_months(action, cutoff, batch_size, dry_run):
     return per_month
 
 
+def _is_partitioned():
+    """Whether ``audit_logs_metadata`` is a PostgreSQL partitioned table.
+
+    Only the retention task probes this; the model and service stay unaware that
+    an operator may have partitioned the table. A partitioned parent carries the
+    ``p`` relkind in the catalog, where a plain table carries ``r``.
+    """
+    if db.engine.name != "postgresql":
+        return False
+    relkind = db.session.execute(
+        text(
+            "SELECT c.relkind FROM pg_class c "
+            "JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE c.relname = :name AND n.nspname = 'public'"
+        ),
+        {"name": AuditLog.__tablename__},
+    ).scalar()
+    return relkind == "p"
+
+
+def _partition_of_month(month, following):
+    """Return the child partition holding the ``[month, following)`` rows.
+
+    The child is found from the table OID of any row in the month rather than by
+    parsing partition bounds, so the task stays agnostic to the partition key: it
+    works whether the operator ranged the partitions on ``created`` or on a
+    time-ordered UUIDv7 id. Only cold months with rows reach here, so a row always
+    exists to read the OID from.
+    """
+    return db.session.execute(
+        text(
+            f"SELECT tableoid::regclass::text FROM {AuditLog.__tablename__} "
+            "WHERE created >= :start AND created < :end LIMIT 1"
+        ),
+        {"start": month, "end": following},
+    ).scalar()
+
+
+def _rewrite_partition(partition, expired_actions):
+    """Shrink a cold partition to its survivors inside one transaction.
+
+    Survivors are copied to a temporary table, the child partition is truncated,
+    and the survivors are reinserted, so only survivors reach the write-ahead log
+    and the ``ACCESS EXCLUSIVE`` lock stays scoped to this one cold child, never
+    the hot current month. Survivors keep their ids, so the reinserted rows route
+    back into the same partition's range.
+    """
+    survivors = text(
+        f"CREATE TEMP TABLE _audit_survivors AS "
+        f"SELECT * FROM {partition} WHERE action NOT IN :actions"
+    ).bindparams(bindparam("actions", expanding=True))
+    db.session.execute(text("DROP TABLE IF EXISTS _audit_survivors"))
+    db.session.execute(survivors, {"actions": expired_actions})
+    db.session.execute(text(f"TRUNCATE TABLE {partition}"))
+    db.session.execute(text(f"INSERT INTO {partition} SELECT * FROM _audit_survivors"))
+    db.session.execute(text("DROP TABLE _audit_survivors"))
+
+
+def _delete_partitions(finite_cutoffs, dry_run):
+    """Delete expired events from a partitioned table, one cold child at a time.
+
+    Within a cold month a row is expired exactly when its action's cutoff is later
+    than the month, so expiry is decided per action for the whole partition without
+    scanning rows. A partition whose every row is expired is truncated as a
+    metadata operation; one that still holds survivors is rewritten down to them.
+    The current (hot) month never appears, because month-aligned cutoffs leave no
+    expired rows there. Returns the same ``{action: [(month, rows)]}`` breakdown as
+    the batched fallback, so the run log and report are identical across profiles.
+    """
+    expired = _expired_clause(finite_cutoffs)
+    months = sorted(
+        {
+            _month_floor(_naive_utc(created))
+            for (created,) in db.session.query(AuditLog.created).filter(expired).all()
+        }
+    )
+
+    per_action = {}
+    for month in months:
+        following = _next_month(month)
+        expired_actions = [a for a, cutoff in finite_cutoffs.items() if month < cutoff]
+        counts = (
+            db.session.query(AuditLog.action, func.count(AuditLog.id))
+            .filter(
+                AuditLog.created >= month,
+                AuditLog.created < following,
+                AuditLog.action.in_(expired_actions),
+            )
+            .group_by(AuditLog.action)
+            .all()
+        )
+        for action, rows in counts:
+            per_action.setdefault(action, []).append((month, rows))
+
+        if dry_run:
+            continue
+
+        survivors = (
+            db.session.query(func.count(AuditLog.id))
+            .filter(
+                AuditLog.created >= month,
+                AuditLog.created < following,
+                AuditLog.action.notin_(expired_actions),
+            )
+            .scalar()
+        )
+        partition = _partition_of_month(month, following)
+        if survivors:
+            _rewrite_partition(partition, expired_actions)
+        else:
+            db.session.execute(text(f"TRUNCATE TABLE {partition}"))
+        db.session.commit()
+    return per_action
+
+
 @shared_task(ignore_result=True)
 def delete_expired_audit_logs(dry_run=False):
     """Delete expired audit log events from PostgreSQL.
 
     For every action present in the table the resolver decides whether the action
     is kept forever or yields a whole-month cutoff. Events older than the cutoff
-    are deleted in bounded batches; kept-forever and not-yet-expired events stay.
-    A single-run lock prevents overlapping runs, and the run is idempotent because
-    a second pass finds nothing left past the cutoff.
+    are removed; kept-forever and not-yet-expired events stay. Where an operator
+    has partitioned the table by month the task drops or rewrites whole cold
+    partitions, otherwise it deletes in bounded batches; both reach the same end
+    state. A single-run lock prevents overlapping runs, and the run is idempotent
+    because a second pass finds nothing left past the cutoff.
 
     With ``dry_run`` the task counts what it would remove and reports it without
     deleting any row or writing a run log entry, so an operator can validate a
@@ -231,9 +348,21 @@ def delete_expired_audit_logs(dry_run=False):
         if not dry_run and finite_cutoffs:
             _delete_from_opensearch(finite_cutoffs)
 
+        # The two profiles share retention semantics and differ only in how rows
+        # leave PostgreSQL: whole-partition operations where an operator has
+        # partitioned the table, batched DELETEs otherwise.
+        if not finite_cutoffs:
+            per_action = {}
+        elif _is_partitioned():
+            per_action = _delete_partitions(finite_cutoffs, dry_run)
+        else:
+            per_action = {
+                action: _expired_months(action, cutoff, batch_size, dry_run)
+                for action, cutoff in finite_cutoffs.items()
+            }
+
         report = {}
-        for action, cutoff in finite_cutoffs.items():
-            per_month = _expired_months(action, cutoff, batch_size, dry_run)
+        for action, per_month in per_action.items():
             if not per_month:
                 continue
             if dry_run:
