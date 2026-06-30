@@ -1,3 +1,105 @@
+# SPDX-FileCopyrightText: 2025-2026 Graz University of Technology.
+# SPDX-FileCopyrightText: 2025 CERN.
+# SPDX-FileCopyrightText: 2026 TU Wien.
+# SPDX-License-Identifier: MIT
+
+[project]
+name = "invenio-audit-logs"
+description = "Module providing audit logging features for Invenio."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [
+  { name = "CERN", email = "info@inveniosoftware.org" },
+]
+keywords = [
+  "TODO",
+  "invenio",
+]
+classifiers = [
+  "Development Status :: 1 - Planning",
+]
+dependencies = [
+  "invenio-accounts>=9.0.0,<10.0.0",
+  "invenio-administration>=7.0.0,<8.0.0",
+  "invenio-base>=2.3.0,<3.0.0",
+  "invenio-i18n>=4.0.0,<5.0.0",
+  "invenio-indexer>=6.0.0,<7.0.0",
+  "invenio-records-resources>=11.0.0,<12.0.0",
+]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/inveniosoftware/invenio-audit-logs"
+
+[project.entry-points."invenio_base.api_apps"]
+invenio_audit_logs = "invenio_audit_logs:InvenioAuditLogs"
+
+[project.entry-points."invenio_base.api_blueprints"]
+invenio_audit_logs = "invenio_audit_logs.views:create_audit_logs_blueprint"
+invenio_audit_logs_ext = "invenio_audit_logs.views:blueprint"
+
+[project.entry-points."invenio_base.apps"]
+invenio_audit_logs = "invenio_audit_logs:InvenioAuditLogs"
+
+[project.entry-points."invenio_base.blueprints"]
+invenio_audit_logs_ext = "invenio_audit_logs.views:blueprint"
+
+[project.entry-points."invenio_db.alembic"]
+invenio_audit_logs = "invenio_audit_logs:alembic"
+
+[project.entry-points."invenio_search.index_templates"]
+invenio_audit_logs = "invenio_audit_logs.records.mappings.templates"
+
+[project.optional-dependencies]
+elasticsearch7 = [
+  "invenio-search[elasticsearch7]>=3.0.0,<4.0.0",
+]
+opensearch1 = [
+  "invenio-search[opensearch1]>=3.0.0,<4.0.0",
+]
+opensearch2 = [
+  "invenio-search[opensearch2]>=3.0.0,<4.0.0",
+]
+tests = [
+  "invenio-app>=3.0.0,<4.0.0",
+  "invenio-db>=2.2.0,<3.0.0",
+  "invenio-indexer>=6.0.0,<7.0.0",
+  "pytest-black>=0.6.0",
+  "pytest-invenio>=4.0.0,<5.0.0",
+  "sphinx>=4.5.0",
+]
+
 [build-system]
-requires = ["setuptools", "wheel", "babel>2.8"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "invenio_audit_logs/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/invenio_audit_logs",
+]
+
+[tool.isort]
+profile = "black"
+
+[tool.pydocstyle]
+add_ignore = "D401,D403"
+
+[tool.pytest.ini_options]
+addopts = '--black --isort --pydocstyle --doctest-glob="*.rst" --doctest-modules --cov=invenio_audit_logs --cov-report=term-missing'
+testpaths = "tests invenio_audit_logs"
+live_server_scope = "module"
+
+# UV needs to be told explicitly which extras are conflicting:
+# https://docs.astral.sh/uv/concepts/projects/config/#conflicting-dependencies
+[tool.uv]
+conflicts = [
+  [
+    { extra = "opensearch1" },
+    { extra = "opensearch2" },
+    { extra = "elasticsearch7" },
+  ]
+]
