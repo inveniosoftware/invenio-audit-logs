@@ -28,8 +28,13 @@ class AuditLog(Record):
     )
     """Search dumper with configured dump keys."""
 
-    index = IndexField("auditlog-audit-log-v2.0.0", search_alias="auditlog")
-    """The search engine index to use."""
+    index = IndexField("auditlog", search_alias="auditlog")
+    """Read alias spanning the monthly ``auditlog-YYYY-MM`` indices.
+
+    Writes route to a per-month index derived from ``created`` (see
+    ``AuditLogService.record_to_index``); this alias is what search and refresh
+    use to reach every month at once.
+    """
 
     id = ModelField("id", dump_type=UUID)
 

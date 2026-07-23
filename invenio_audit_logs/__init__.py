@@ -6,10 +6,12 @@
 """Module providing audit logging features for Invenio.."""
 
 from .ext import InvenioAuditLogs
+from .retention import KEEP_FOREVER
 
 __version__ = "4.0.1"
 
 __all__ = (
     "__version__",
     "InvenioAuditLogs",
+    "KEEP_FOREVER",
 )

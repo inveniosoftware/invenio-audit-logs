@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 """Test audit log builder."""
 
-import pytest
 from flask import g
 from flask_login import login_user
 from invenio_access.permissions import system_identity
