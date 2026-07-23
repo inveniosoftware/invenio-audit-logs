@@ -45,9 +45,23 @@ AUDIT_LOGS_SORT_OPTIONS = {
 AUDIT_LOGS_ENABLED = False
 """Feature flag. Disabled by default."""
 
+AUDIT_LOGS_ENABLED_ACTIONS = None
+"""
+Allow-list of actions to include in the audit logs.
+
+``None`` (the default) allows all registered actions. Set it to a set of action
+names to log only those; any other action is skipped. An action in
+``AUDIT_LOGS_DISABLED_ACTIONS`` is never logged, even if you list it here.
+To find all the available actions, check the entry points in the `invenio_audit_logs.actions` group.
+```python
+>>> from invenio_base.utils import entry_points
+>>> [ep.name for ep in entry_points(group="invenio_audit_logs.actions")]
+```
+"""
+
 AUDIT_LOGS_DISABLED_ACTIONS = set()
 """
-Disabled actions to be excluded from the audit logs.
+Deny-list of actions to be excluded from the audit logs.
 To find all the available actions, check the entry points in the `invenio_audit_logs.actions` group.
 ```python
 >>> from invenio_base.utils import entry_points
