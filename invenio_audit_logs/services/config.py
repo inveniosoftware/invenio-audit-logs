@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 CERN.
+# SPDX-FileCopyrightText: 2026 CESNET z.s.p.o.
 # SPDX-License-Identifier: MIT
 
 """Audit Logs Service Config."""
@@ -97,7 +98,10 @@ class AuditLogServiceConfig(ServiceConfig, ConfiguratorMixin):
     indexer_queue_name = service_id
     index_dumper = None
 
-    components = []
+    components = FromConfig(
+        "AUDIT_LOGS_SERVICE_COMPONENTS",
+        default=[],
+    )
     links_item = {
         "self": EndpointLink(
             "audit_logs.read",

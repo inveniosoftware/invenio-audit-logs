@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 CERN.
+# SPDX-FileCopyrightText: 2026 CESNET z.s.p.o.
 # SPDX-License-Identifier: MIT
 
 """Pytest configuration.
@@ -9,6 +10,7 @@ fixtures are available.
 
 import pytest
 from invenio_app.factory import create_api as _create_api
+from mock_module.auditlog.components import CallTrackingComponent
 
 
 @pytest.fixture(scope="module")
@@ -16,6 +18,8 @@ def app_config(app_config):
     """Application config override."""
     app_config["THEME_FRONTPAGE"] = False
     app_config["AUDIT_LOGS_ENABLED"] = True
+
+    app_config["AUDIT_LOGS_SERVICE_COMPONENTS"] = [CallTrackingComponent]
     return app_config
 
 
