@@ -1,12 +1,13 @@
 # SPDX-FileCopyrightText: 2025 CERN.
+# SPDX-FileCopyrightText: 2026 CESNET z.s.p.o.
 # SPDX-License-Identifier: MIT
 """Test audit log service."""
 
 import pytest
-from flask import g
 from flask_login import login_user
 from invenio_access.permissions import system_identity
 from invenio_records_resources.services.errors import PermissionDeniedError
+from mock_module.auditlog.components import CallTrackingComponent
 
 
 def test_audit_log_create(
@@ -19,16 +20,20 @@ def test_audit_log_create(
     """Should succeed when identity matches g.identity."""
     login_user(current_user, force=True)
 
+    CallTrackingComponent.reset()
     with app.test_request_context():
         result = service.create(
             identity=system_identity,
             data=resource_data,
         )
+    assert CallTrackingComponent.create_called
 
+    CallTrackingComponent.reset()
     result = service.read(
         identity=system_identity,
         id_=result.id,
     )
+    assert CallTrackingComponent.read_called
 
     assert result["action"] == "draft.create"
     assert result["resource"] == {
@@ -55,7 +60,7 @@ def test_audit_log_create(
     expected_links = {
         "self": (
             "https://127.0.0.1:5000/api/audit-logs/?"
-            f"page=1&q=resource.id:+abcd-1234+AND+action:+draft.create"
+            "page=1&q=resource.id:+abcd-1234+AND+action:+draft.create"
             "&size=20&sort=newest"
         )
     }
