@@ -7,6 +7,10 @@
 Changes
 =======
 
+Version v4.1.0 (released 2026-08-12)
+
+- feat: Configuration of service components
+
 Version v4.0.1 (released 2026-07-16)
 
 - chore(setup): migrate from setuptools to hatchling
