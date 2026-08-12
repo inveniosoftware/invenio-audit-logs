@@ -6,6 +6,10 @@
 Changes
 =======
 
+Version v3.0.2 (released 2026-08-12)
+
+- feat: Configuration of service components
+
 Version v3.0.1 (released 2026-07-21)
 
 - chore(setup): migrate from setuptools to hatchling
