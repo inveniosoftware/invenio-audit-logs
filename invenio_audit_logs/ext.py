@@ -24,6 +24,7 @@ class InvenioAuditLogs(object):
         self.init_services(app)
         self.init_resources(app)
         self.load_actions_registry()
+        self.validate_actions_config(app)
         app.extensions["invenio-audit-logs"] = self
 
     def init_config(self, app):
@@ -54,3 +55,24 @@ class InvenioAuditLogs(object):
             action_name = action.id
             self.actions_registry[action_name] = action
             self.schema_cache[action_name] = action.marshmallow_schema()
+
+    def validate_actions_config(self, app):
+        """Check the action allow/deny lists against the registry."""
+        known = set(self.actions_registry)
+        enabled = set(app.config.get("AUDIT_LOGS_ENABLED_ACTIONS") or set())
+        disabled = set(app.config.get("AUDIT_LOGS_DISABLED_ACTIONS") or set())
+
+        unknown = (enabled | disabled) - known
+        if unknown:
+            raise RuntimeError(
+                f"Unknown audit log actions configured: {sorted(unknown)}. "
+                f"Registered actions are: {sorted(known)}."
+            )
+
+        overlap = enabled & disabled
+        if overlap:
+            raise RuntimeError(
+                f"Audit log actions {sorted(overlap)} are in both "
+                "AUDIT_LOGS_ENABLED_ACTIONS and AUDIT_LOGS_DISABLED_ACTIONS. "
+                "An action cannot be both allowed and denied."
+            )
