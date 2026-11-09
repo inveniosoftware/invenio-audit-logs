@@ -7,6 +7,10 @@
 Changes
 =======
 
+Version v5.0.0 (released 2026-11-10)
+
+- chore(setup): bump dependencies
+
 Version v4.1.0 (released 2026-08-12)
 
 - feat: Configuration of service components
