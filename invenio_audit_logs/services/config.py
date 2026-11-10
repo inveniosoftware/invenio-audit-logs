@@ -40,6 +40,17 @@ class ActionParam(ParamInterpreter):
         return search
 
 
+class UserIdParam(ParamInterpreter):
+    """Evaluates the 'user_id' parameter."""
+
+    def apply(self, identity, search, params):
+        """Filter by user.id field."""
+        value = params.pop("user_id", None)
+        if value is not None:
+            search = search.filter("term", **{"user.id": value})
+        return search
+
+
 class AuditLogSearchOptions(SearchOptionsBase):
     """Audit log search options."""
 
@@ -72,6 +83,7 @@ class AuditLogSearchOptions(SearchOptionsBase):
 
     params_interpreters_cls = [
         ActionParam,
+        UserIdParam,
         QueryStrParam,
         SortParam,
         PaginationParam,
