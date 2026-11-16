@@ -88,7 +88,7 @@ def test_write_lands_in_monthly_index_under_read_alias(app, db, service, resourc
     resource_data["resource"]["id"] = "monthly-write"
     with app.test_request_context():
         service.create(identity=system_identity, data=resource_data)
-    service.record_cls.index.refresh()
+    service.indexer.refresh()
 
     now = datetime.now(timezone.utc)
     month_index = _month_index(now)
@@ -115,7 +115,7 @@ def test_no_data_stream_or_rollover(app, db, service, resource_data):
     resource_data["resource"]["id"] = "monthly-no-stream"
     with app.test_request_context():
         service.create(identity=system_identity, data=resource_data)
-    service.record_cls.index.refresh()
+    service.indexer.refresh()
 
     client = current_search_client
     assert client.indices.get_data_stream(name="*auditlog*")["data_streams"] == []
@@ -134,9 +134,9 @@ def test_reindex_spreads_existing_data_across_months(app, db, service):
         for created, rid in months.values():
             _insert("draft.create", created, rid)
 
-        reindexed = service.reindex(identity=system_identity)
-        assert reindexed == 3
-        service.record_cls.index.refresh()
+        service.rebuild_index(identity=system_identity)
+        service.indexer.process_bulk_queue()
+        service.indexer.refresh()
 
         client = current_search_client
         # Each row landed in the index for its own month, and nowhere else.
