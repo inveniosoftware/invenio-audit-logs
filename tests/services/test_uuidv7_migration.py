@@ -13,12 +13,13 @@ copy can be rebuilt with the new ids.
 import importlib.util
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from invenio_access.permissions import system_identity
 from invenio_db import db
 from invenio_search import current_search_client
+from invenio_search.utils import build_alias_name
 from sqlalchemy import text
 
 import invenio_audit_logs
@@ -80,7 +81,9 @@ def _clean_audit_search(app):
     """Delete the monthly ``auditlog`` indices a test fills so they don't reach the next."""
     yield
     with app.app_context():
-        current_search_client.indices.delete(index="auditlog*", ignore_unavailable=True)
+        current_search_client.indices.delete(
+            index=build_alias_name("auditlog*"), ignore_unavailable=True
+        )
 
 
 def test_rewrite_replaces_uuid4_with_uuid7_derived_from_created(app, db):
@@ -110,6 +113,27 @@ def test_rewrite_replaces_uuid4_with_uuid7_derived_from_created(app, db):
             assert _ts_ms(row.id) == expected
 
 
+def test_rewrite_leaves_uuid7_ids_alone(app, db):
+    """Rows that already have a UUIDv7 id keep it; only uuid4 rows change."""
+    if db.engine.name != "postgresql":
+        pytest.skip("Id rewrite runs against PostgreSQL")
+
+    with app.app_context():
+        created = datetime(2025, 7, 2, 9, 0)
+        ms = int(created.replace(tzinfo=UTC).timestamp() * 1000)
+        v7 = _insert(
+            UUID(int=(ms << 80) | (0x7 << 76) | (0b10 << 62) | 1), "user.login", created
+        )
+        v4 = _insert(uuid4(), "user.login", created)
+
+        _rewrite()
+
+        ids = {row.id for row in db.session.query(AuditLog).all()}
+        assert v7 in ids
+        assert v4 not in ids
+        assert {i.version for i in ids} == {7}
+
+
 def test_rewrite_preserves_time_order(app, db):
     """After the rewrite, an earlier ``created`` gives a smaller id than a later one."""
     if db.engine.name != "postgresql":
@@ -134,8 +158,8 @@ def test_retention_still_keys_on_created_after_rewrite(
 
     set_app_config_fn_scoped(
         {
-            "AUDIT_LOGS_RETENTION": {"user.login": timedelta(days=60)},
-            "AUDIT_LOGS_RETENTION_DEFAULT": timedelta(days=395),
+            "AUDIT_LOGS_RETENTION": {"user.login": 2},
+            "AUDIT_LOGS_RETENTION_DEFAULT": 13,
         }
     )
 
@@ -148,10 +172,10 @@ def test_retention_still_keys_on_created_after_rewrite(
 
         deleted = delete_expired_audit_logs()
 
-        survivors = db.session.query(AuditLog).all()
+        remaining = db.session.query(AuditLog).all()
         assert deleted == {"user.login": 1}
-        assert len(survivors) == 1
-        assert survivors[0].created.date() == now.date()
+        assert len(remaining) == 1
+        assert remaining[0].created.date() == now.date()
 
 
 def test_reindex_after_rewrite_is_searchable(app, db, service):
@@ -165,13 +189,13 @@ def test_reindex_after_rewrite_is_searchable(app, db, service):
         _rewrite()
         new_id = db.session.query(AuditLog.id).scalar()
 
-        reindexed = service.reindex(system_identity)
-        service.record_cls.index.refresh()
+        service.rebuild_index(system_identity)
+        service.indexer.process_bulk_queue()
+        service.indexer.refresh()
         with app.test_request_context():
             results = service.search(
                 identity=system_identity, params={"q": "action: draft.create"}
             )
 
         assert new_id.version == 7
-        assert reindexed == 1
         assert results.total == 1

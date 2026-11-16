@@ -15,6 +15,8 @@ depends_on = None
 # millisecond timestamp, then the digit 7, then random bits. We take the timestamp
 # from each row's ``created`` (stored as UTC), so the new ids sort in time order.
 # ``gen_random_uuid()`` gives the random bits and comes built into PostgreSQL.
+# Rows that already have a UUIDv7 id are left alone, so a table that was copied
+# into a partitioned one with new ids beforehand is not written again.
 REWRITE_IDS_TO_UUID7 = """
 UPDATE audit_logs_metadata
 SET id = (
@@ -24,6 +26,7 @@ SET id = (
     || to_hex(8 + floor(random() * 4)::int)
     || substr(replace(gen_random_uuid()::text, '-', ''), 1, 15)
 )::uuid
+WHERE substr(id::text, 15, 1) <> '7'
 """
 
 
@@ -33,8 +36,9 @@ def upgrade():
     This is what lets an operator partition the table by time on the primary key.
     Changing the id is safe: audit log ids are never foreign keys, and retention
     deletes rows by ``created``, not by id, so nothing else changes. After this,
-    rebuild the search copy from PostgreSQL with ``AuditLogService.reindex`` so
-    OpenSearch uses the new ids.
+    rebuild the search copy from PostgreSQL with
+    ``current_audit_logs_service.rebuild_index(system_identity)`` and process the
+    bulk indexing queue, so OpenSearch uses the new ids.
     """
     op.execute(REWRITE_IDS_TO_UUID7)
 
