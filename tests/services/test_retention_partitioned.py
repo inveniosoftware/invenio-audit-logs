@@ -4,7 +4,7 @@
 """Retention on a month-partitioned ``audit_logs_metadata`` table.
 
 By default retention deletes old rows in batches. If an operator partitions the
-table by month, the task drops or rewrites whole old partitions instead. Both ways
+table by month, the task empties or rewrites whole old partitions instead. Both ways
 must end up with the same rows, so these tests set up a partitioned table and check
 that the kept rows match the batched version and that only old partitions are
 touched.
@@ -16,6 +16,8 @@ builds the table from the model, so only the monthly ranges are here. The setup 
 in the test's transaction, so the table goes back to normal after each test.
 """
 
+import random
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -44,9 +46,10 @@ def _next_month(month_start):
     return month_start.replace(month=month_start.month + 1)
 
 
-def _insert(action, created):
+def _insert(action, created, id_=None):
     """Insert an audit log row with a chosen ``created`` timestamp."""
     row = AuditLog(
+        id=id_,
         action=action,
         resource_type="record",
         user_id="1",
@@ -79,18 +82,16 @@ def _partition_names():
 def retention_config(set_app_config_fn_scoped):
     """Logins kept 2 months, blocks kept forever, everything else 13 months.
 
-    ``draft.create`` is kept forever too. It is a registered action, so it can be a
-    kept row that the OpenSearch rebuild reindexes from PostgreSQL; an unregistered
-    action could not.
+    ``draft.create`` is kept forever too, so an old month can hold a kept row.
     """
     set_app_config_fn_scoped(
         {
             "AUDIT_LOGS_RETENTION": {
-                "user.login": timedelta(days=60),
+                "user.login": 2,
                 "user.block": KEEP_FOREVER,
                 "draft.create": KEEP_FOREVER,
             },
-            "AUDIT_LOGS_RETENTION_DEFAULT": timedelta(days=395),
+            "AUDIT_LOGS_RETENTION_DEFAULT": 13,
         }
     )
 
@@ -148,7 +149,7 @@ def test_fully_expired_partition_is_emptied(app, partitioned_table):
         assert {a, b}.isdisjoint(_remaining_ids())
 
 
-def test_partition_with_survivors_is_rewritten(app, partitioned_table):
+def test_partition_with_kept_rows_is_rewritten(app, partitioned_table):
     """An old month keeps the rows that have not expired and drops the rest."""
     with app.app_context():
         month_start = partitioned_table
@@ -291,3 +292,142 @@ def test_model_and_service_unaware_of_partitioning(
 
         assert fetched["resource"]["id"] == "partitioned-transparency"
         assert fetched["action"] == "draft.create"
+
+
+def _wide_layouts(month_start):
+    """Layouts where a child holds more than one month of ``created``."""
+    year_start = _months_before(month_start, 24)
+    year_end = _months_before(month_start, 12)
+    monthly = {}
+    for n in range(11, -2, -1):
+        start = _months_before(month_start, n)
+        monthly[f"audit_logs_metadata_y{start.year}_m{start.month:02d}"] = (
+            f"{start:%Y-%m-%d}",
+            f"{_next_month(start):%Y-%m-%d}",
+        )
+    return {
+        "yearly": {
+            "audit_logs_metadata_old": (
+                f"{year_start:%Y-%m-%d}",
+                f"{year_end:%Y-%m-%d}",
+            ),
+            **monthly,
+        },
+        "default": {
+            "audit_logs_metadata_default": None,
+            **{
+                k: v
+                for k, v in monthly.items()
+                if k.endswith(f"m{month_start.month:02d}")
+            },
+        },
+    }
+
+
+@pytest.mark.parametrize("layout", ["yearly", "default"])
+def test_wide_partition_keeps_other_months(
+    app, retention_config, partition_audit_table, layout
+):
+    """A child spanning several months only loses the expired rows.
+
+    Month 20 back is fully expired, month 13 back is not (``record.publish`` keeps
+    13 months). Both land in the same child, so the child must not be truncated.
+    """
+    with app.app_context():
+        now = datetime.now(UTC).replace(tzinfo=None)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        partition_audit_table(
+            "RANGE (created)",
+            _wide_layouts(month_start)[layout],
+            primary_key=("id", "created"),
+        )
+        expired = _insert("record.publish", _months_before(month_start, 20))
+        kept = _insert("record.publish", _months_before(month_start, 13))
+        recent = _insert("record.publish", now)
+
+        deleted = delete_expired_audit_logs()
+
+        assert deleted == {"record.publish": 1}
+        assert _remaining_ids() == {kept, recent}
+        assert expired not in _remaining_ids()
+
+
+def _uuid7_floor(dt):
+    """Return the smallest UUID whose leading 48 bits are ``dt`` in milliseconds."""
+    return uuid.UUID(int=int(dt.replace(tzinfo=UTC).timestamp() * 1000) << 80)
+
+
+def _uuid7_at(dt):
+    """Return a UUIDv7 for ``dt``, as if the row had been written at that time."""
+    ms = int(dt.replace(tzinfo=UTC).timestamp() * 1000)
+    rand_a, rand_b = random.getrandbits(12), random.getrandbits(62)
+    return uuid.UUID(int=(ms << 80) | (7 << 76) | (rand_a << 64) | (2 << 62) | rand_b)
+
+
+def test_id_partitioned_handles_rows_outside_their_month(
+    app, retention_config, partition_audit_table
+):
+    """Partitioned by UUIDv7 id, rows whose id and ``created`` months differ.
+
+    A login written just after a month boundary sits in the next child. A backdated
+    publish sits in the current child, which retention does not rewrite, so the
+    batched path removes it.
+    """
+    with app.app_context():
+        now = datetime.now(UTC).replace(tzinfo=None)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        children = {}
+        for n in range(24, -2, -1):
+            start = _months_before(month_start, n)
+            children[f"audit_logs_metadata_y{start.year}_m{start.month:02d}"] = (
+                _uuid7_floor(start),
+                _uuid7_floor(_next_month(start)),
+            )
+        partition_audit_table("RANGE (id)", children)
+
+        five_back = _months_before(month_start, 5)
+        stray_login = _insert(
+            "user.login",
+            five_back - timedelta(milliseconds=1),
+            _uuid7_at(five_back),
+        )
+        kept = _insert("draft.create", five_back, _uuid7_at(five_back))
+        old_login = _insert("user.login", five_back, _uuid7_at(five_back))
+        backdated = _insert(
+            "record.publish", _months_before(month_start, 20), _uuid7_at(now)
+        )
+        recent = _insert("record.publish", now, _uuid7_at(now))
+
+        deleted = delete_expired_audit_logs()
+
+        assert deleted == {"user.login": 2, "record.publish": 1}
+        assert _remaining_ids() == {kept, recent}
+        assert {stray_login, old_login, backdated}.isdisjoint(_remaining_ids())
+
+
+def test_partition_name_that_needs_quoting(
+    app, retention_config, partition_audit_table
+):
+    """A child whose name only works quoted is rewritten like any other."""
+    with app.app_context():
+        now = datetime.now(UTC).replace(tzinfo=None)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        old = _months_before(month_start, 5)
+        partition_audit_table(
+            "RANGE (created)",
+            {
+                '"Audit Old"': (f"{old:%Y-%m-%d}", f"{_next_month(old):%Y-%m-%d}"),
+                "audit_logs_metadata_rest": None,
+            },
+            primary_key=("id", "created"),
+        )
+        expired = _insert("user.login", old)
+        kept = _insert("draft.create", old + timedelta(days=1))
+
+        deleted = delete_expired_audit_logs()
+
+        assert deleted == {"user.login": 1}
+        assert _remaining_ids() == {kept}
+        assert expired not in _remaining_ids()
+        held = db.session.execute(text('SELECT id FROM "Audit Old"')).scalars().all()
+        assert held == [kept]

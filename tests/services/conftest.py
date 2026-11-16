@@ -52,7 +52,8 @@ def partition_audit_table(db):
     runs in the test's transaction, so the table goes back to normal when the test
     ends.
 
-    ``children`` maps each child partition name to its ``(from, to)`` range. Pass
+    ``children`` maps each child partition name to its ``(from, to)`` range, or to
+    ``None`` for the default partition. Pass
     ``primary_key`` when the partition key has to be part of the primary key (which
     PostgreSQL requires); leave it out to keep the model's primary key.
     """
@@ -70,12 +71,14 @@ def partition_audit_table(db):
 
         db.session.execute(DropTable(AuditLog.__table__))
         db.session.execute(CreateTable(clone))
-        for name, (start, end) in children.items():
+        for name, bounds in children.items():
+            spec = (
+                "DEFAULT"
+                if bounds is None
+                else f"FOR VALUES FROM ('{bounds[0]}') TO ('{bounds[1]}')"
+            )
             db.session.execute(
-                text(
-                    f"CREATE TABLE {name} PARTITION OF audit_logs_metadata "
-                    f"FOR VALUES FROM ('{start}') TO ('{end}')"
-                )
+                text(f"CREATE TABLE {name} PARTITION OF audit_logs_metadata {spec}")
             )
         db.session.commit()
 

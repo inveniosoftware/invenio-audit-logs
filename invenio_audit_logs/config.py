@@ -3,8 +3,6 @@
 
 """Configuration for invenio-audit-logs."""
 
-from datetime import timedelta
-
 from invenio_records_resources.services.records.facets import TermsFacet
 
 AUDIT_LOGS_SEARCH = {
@@ -55,26 +53,25 @@ To find all the available actions, check the entry points in the `invenio_audit_
 ```
 """
 
-AUDIT_LOGS_RETENTION_DEFAULT = timedelta(days=395)
-"""Retention applied to any action without an explicit entry below.
+AUDIT_LOGS_RETENTION_DEFAULT = 13
+"""Retention in months for any action without an explicit entry below.
 
 Finite on purpose: a new or unconfigured action is kept for this period rather
-than forever by oversight. ~13 months is a common security-log default. Periods
-are interpreted at whole-month granularity, so events can be up to one month
-older than the nominal period before the next monthly run clears them.
+than forever by oversight. 13 months is a common security-log default. An event
+is deleted once its calendar month is this many months before the current one, so
+it is kept at least this many months and at most one month more.
 """
 
 AUDIT_LOGS_RETENTION = {}
 """Per-action retention periods, keyed on the action id.
 
-Each value is a ``timedelta`` or the ``KEEP_FOREVER`` sentinel. Keeping an action
-forever is the deliberate exception, e.g.::
+Each value is a number of months or the ``KEEP_FOREVER`` sentinel. Keeping an
+action forever is the deliberate exception, e.g.::
 
-    from datetime import timedelta
     from invenio_audit_logs import KEEP_FOREVER
 
     AUDIT_LOGS_RETENTION = {
-        "user.login": timedelta(days=60),
+        "user.login": 2,
         "user.block": KEEP_FOREVER,
     }
 """

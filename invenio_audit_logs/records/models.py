@@ -39,9 +39,9 @@ class RetentionRun(db.Model):
 
     The audit log table cannot vouch for its own deletions, since it is the data
     being removed and is itself subject to retention. This table lives apart from
-    ``audit_logs_metadata`` so it survives those deletions and stays queryable as
-    proof that the policy ran. It holds counts and status only, never event
-    content.
+    ``audit_logs_metadata`` so those deletions do not touch it and it stays
+    queryable as proof that the policy ran. It holds counts and status only, never
+    event content.
     """
 
     __tablename__ = "audit_logs_retention_runs"
@@ -53,8 +53,8 @@ class RetentionRun(db.Model):
 
     action = db.Column(String(255), nullable=False)
 
-    retention_days = db.Column(db.Integer, nullable=False)
-    """The applied retention period, in days."""
+    retention_months = db.Column(db.Integer, nullable=False)
+    """The applied retention period, in months."""
 
     month = db.Column(db.Date, nullable=False)
     """First day of the deleted month."""

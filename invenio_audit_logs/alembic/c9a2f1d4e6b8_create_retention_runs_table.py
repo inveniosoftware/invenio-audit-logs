@@ -25,7 +25,7 @@ def upgrade():
             nullable=False,
         ),
         sa.Column("action", sa.String(length=255), nullable=False),
-        sa.Column("retention_days", sa.Integer(), nullable=False),
+        sa.Column("retention_months", sa.Integer(), nullable=False),
         sa.Column("month", sa.Date(), nullable=False),
         sa.Column("rows_deleted", sa.Integer(), nullable=False),
         sa.Column("status", sa.String(length=32), nullable=False),

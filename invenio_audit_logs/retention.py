@@ -45,16 +45,8 @@ def _subtract_months(dt, months):
 class RetentionPolicy:
     """Resolve per-action retention periods to expiry cutoffs.
 
-    Periods are configured as ``timedelta`` values and interpreted at whole-month
-    granularity, aligned to the monthly storage. A period covers as many whole
-    months as fit in its days, so 60 days keeps two months and 395 days keeps
-    thirteen.
+    Periods are whole months, aligned to the monthly storage.
     """
-
-    # Approximate a month as 30 days when reducing a timedelta to whole months.
-    # The cutoff itself snaps to calendar-month boundaries, so this only decides
-    # how many months a configured period covers.
-    _days_per_month = 30
 
     def __init__(self, periods, default):
         """Build a resolver from a per-action mapping and a finite default."""
@@ -86,5 +78,4 @@ class RetentionPolicy:
         period = self.period(action)
         if period is KEEP_FOREVER:
             return None
-        months = period.days // self._days_per_month
-        return _subtract_months(_month_start(now), months)
+        return _subtract_months(_month_start(now), period)

@@ -3,6 +3,9 @@
 
 """Celery tasks for audit log retention."""
 
+import re
+import time
+import uuid
 from datetime import datetime, timezone
 
 from celery import shared_task
@@ -11,9 +14,18 @@ from invenio_cache.lock import CachedMutex, LockAcquireFailed
 from invenio_db import db
 from invenio_search import current_search_client
 from invenio_search.utils import build_alias_name
-from sqlalchemy import and_, bindparam, func, not_, or_, text
+from sqlalchemy import (
+    and_,
+    column,
+    func,
+    literal_column,
+    not_,
+    or_,
+    select,
+    table,
+    text,
+)
 
-from .proxies import current_audit_logs_service
 from .records.models import AuditLog, RetentionRun
 from .retention import RetentionPolicy
 
@@ -43,72 +55,162 @@ def _naive_utc(dt):
     return dt
 
 
-def _expired_clause(finite_cutoffs):
-    """Build a filter matching every expired event across all finite actions.
+def _expired_clause(finite_cutoffs, source=AuditLog.__table__):
+    """Match events whose ``created`` is before their action's cutoff.
 
-    An event is expired when its action has a finite period and its ``created``
-    falls before that action's cutoff. The same clause drives both the OpenSearch
-    deletion and, by negation, the survivor set, so the two stores agree on which rows
-    a run removes.
+    ``source`` lets the partition rewrite apply it to one child.
     """
     return or_(
         *[
-            and_(AuditLog.action == action, AuditLog.created < cutoff)
+            and_(source.c.action == action, source.c.created < cutoff)
             for action, cutoff in finite_cutoffs.items()
         ]
     )
 
 
-def _delete_from_opensearch(finite_cutoffs):
-    """Drop or rebuild each month index, sourcing survivors from PostgreSQL.
-
-    Expired events are deleted from OpenSearch before PostgreSQL, so survivors are read from the
-    authoritative store while the expired rows it describes still exist. For every
-    month that holds an expired event the stale ``auditlog-YYYY-MM`` index is
-    deleted outright, so expired events vanish with their index rather than through
-    ``delete_by_query``. A month that still holds survivors is then rebuilt from
-    PostgreSQL: reindexing routes each survivor back into that same month by its
-    ``created`` timestamp.
-    """
-    expired = _expired_clause(finite_cutoffs)
-    service = current_audit_logs_service
-    indexer = service.indexer
-    record_cls = service.record_cls
-
-    months = {
-        _month_floor(_naive_utc(created))
-        for (created,) in db.session.query(AuditLog.created).filter(expired).all()
+def _expired_query(finite_cutoffs):
+    """Match in OpenSearch the same events as ``_expired_clause``."""
+    return {
+        "bool": {
+            "should": [
+                {
+                    "bool": {
+                        "filter": [
+                            {"term": {"action": action}},
+                            {"range": {"@timestamp": {"lt": cutoff.isoformat()}}},
+                        ]
+                    }
+                }
+                for action, cutoff in finite_cutoffs.items()
+            ],
+            "minimum_should_match": 1,
+        }
     }
 
-    rebuilt = False
-    for month in months:
-        survivors = [
-            model_id
-            for (model_id,) in db.session.query(AuditLog.id)
-            .filter(
-                AuditLog.created >= month,
-                AuditLog.created < _next_month(month),
-                not_(expired),
+
+def _reindex(source, dest, query):
+    """Copy matching documents server-side, polled so no HTTP request stays open."""
+    client = current_search_client
+    task = client.reindex(
+        body={"source": {"index": source, "query": query}, "dest": {"index": dest}},
+        params={"wait_for_completion": "false", "refresh": "true"},
+    )["task"]
+    while not (result := client.tasks.get(task_id=task))["completed"]:
+        time.sleep(5)
+    if result.get("error") or result["response"]["failures"]:
+        raise RuntimeError(f"reindex {source} -> {dest} failed: {result}")
+
+
+def _delete_from_opensearch(finite_cutoffs, run_at):
+    """Swap each month index holding expired events for a copy of its kept events.
+
+    One atomic alias update moves the read aliases and the month name to the copy
+    and deletes the old index, so search never sees a half-done month. Writes keep
+    using ``auditlog-YYYY-MM``, which is the index or an alias of its latest copy.
+    """
+    client = current_search_client
+    expired = _expired_query(finite_cutoffs)
+    keep = {"bool": {"must_not": [expired]}}
+    read_aliases = [build_alias_name("auditlog"), build_alias_name("audit-log")]
+    if not client.indices.exists_alias(name=read_aliases[0]):
+        return
+    found = client.search(
+        index=read_aliases[0],
+        body={
+            "size": 0,
+            "query": expired,
+            "aggs": {"index": {"terms": {"field": "_index", "size": 10000}}},
+        },
+    )
+    for bucket in found["aggregations"]["index"]["buckets"]:
+        current = bucket["key"]
+        month = re.match(r".*auditlog-\d{4}-\d{2}", current).group()
+        # Copies left by a run that died before its swap are not in any alias.
+        for stale in client.indices.get_alias(index=f"{month}-*"):
+            if stale != current:
+                client.indices.delete(index=stale)
+        kept = client.count(index=current, body={"query": keep})["count"]
+        if not kept:
+            client.indices.delete(index=current)
+            continue
+        copy = f"{month}-{run_at:%Y%m%d%H%M%S}"
+        # The template joins every new auditlog* index to the read aliases; take
+        # the copy out while it is empty so search never sees a half-filled copy.
+        client.indices.create(index=copy)
+        client.indices.update_aliases(
+            body={
+                "actions": [
+                    {"remove": {"index": copy, "alias": alias}}
+                    for alias in read_aliases
+                ]
+            }
+        )
+        _reindex(current, copy, keep)
+        copied = client.count(index=copy)["count"]
+        if copied != kept:
+            raise RuntimeError(f"{copy} holds {copied} documents, expected {kept}")
+        client.indices.update_aliases(
+            body={
+                "actions": [
+                    *({"add": {"index": copy, "alias": a}} for a in read_aliases),
+                    {"add": {"index": copy, "alias": month}},
+                    {"remove_index": {"index": current}},
+                ]
+            }
+        )
+
+
+def _outside(skip):
+    """Filter out rows stored in the ``skip`` child partitions (by table OID)."""
+    if not skip:
+        return True
+    return literal_column("tableoid").notin_(skip)
+
+
+class _RunLog:
+    """Run log rows of one run, one per ``(action, month)``.
+
+    Counts commit with each delete so they match what is gone; a row left
+    ``running`` marks a worker that died mid-run.
+    """
+
+    def __init__(self, policy, run_at):
+        """Start an empty log for a run at ``run_at``."""
+        self.policy = policy
+        self.run_at = run_at
+        self.rows = {}
+
+    def start(self, action, month):
+        """Return the row for ``(action, month)``, committing it first if new."""
+        key = (action, month)
+        if key not in self.rows:
+            row = RetentionRun(
+                run_at=self.run_at,
+                action=action,
+                retention_months=self.policy.period(action),
+                month=month.date(),
+                rows_deleted=0,
+                status="running",
             )
-            .all()
-        ]
-        index = build_alias_name(f"auditlog-{month:%Y-%m}")
-        # Dropping the whole index removes the expired documents without
-        # delete_by_query; the template recreates and re-aliases it on first write.
-        current_search_client.indices.delete(index=index, ignore=[404])
-        for model_id in survivors:
-            indexer.index(record_cls.get_record(model_id))
-            rebuilt = True
-    if rebuilt:
-        record_cls.index.refresh()
+            db.session.add(row)
+            db.session.commit()
+            self.rows[key] = row
+        return self.rows[key]
+
+    def fail(self):
+        """Mark every row this run did not finish as ``failed``."""
+        db.session.rollback()
+        for row in self.rows.values():
+            if row.status == "running":
+                row.status = "failed"
+        db.session.commit()
 
 
-def _delete_range(action, start, end, batch_size):
-    """Delete events of ``action`` with ``created`` in ``[start, end)``.
+def _delete_range(action, start, end, batch_size, log, skip=()):
+    """Delete events of ``action`` in ``[start, end)`` in batches.
 
-    Deletion keys on ``created`` rather than the id, so it is independent of the
-    id version. Each batch commits on its own to keep locks and the write-ahead
-    log small on the live table.
+    Each batch commits with its run log count to keep locks and WAL small on the
+    live table.
     """
     deleted = 0
     while True:
@@ -119,51 +221,49 @@ def _delete_range(action, start, end, batch_size):
                 AuditLog.action == action,
                 AuditLog.created >= start,
                 AuditLog.created < end,
+                _outside(skip),
             )
             .limit(batch_size)
             .all()
         ]
         if not ids:
             break
+        run = log.start(action, start)
         db.session.query(AuditLog).filter(AuditLog.id.in_(ids)).delete(
             synchronize_session=False
         )
+        run.rows_deleted += len(ids)
         db.session.commit()
         deleted += len(ids)
+    if deleted:
+        log.rows[(action, start)].status = "success"
+        db.session.commit()
     return deleted
 
 
-def _count_range(action, start, end):
-    """Count events of ``action`` with ``created`` in ``[start, end)``.
-
-    The dry-run counterpart to ``_delete_range``: it reads exactly the rows a real
-    run would delete, so the preview matches what enforcement removes.
-    """
+def _count_range(action, start, end, skip=()):
+    """Count what ``_delete_range`` would delete, for dry runs."""
     return (
         db.session.query(func.count(AuditLog.id))
         .filter(
             AuditLog.action == action,
             AuditLog.created >= start,
             AuditLog.created < end,
+            _outside(skip),
         )
         .scalar()
     )
 
 
-def _expired_months(action, cutoff, batch_size, dry_run):
-    """Walk the expired months of ``action`` and report rows per month.
+def _expired_months(action, cutoff, batch_size, log, skip=()):
+    """Delete (or with no ``log``, count) expired months of ``action``.
 
-    Walks whole calendar months from the oldest expired event up to ``cutoff``,
-    which the resolver already snapped to a month boundary. A real run deletes each
-    month's rows in bounded batches; a dry run only counts them and touches
-    nothing. Returns a list of ``(month_start, rows)`` for the months with rows,
-    so the caller records one retention run entry per deleted month and reports the
-    same months in a dry run, matching how the partition-aware path will later
-    operate on whole months.
+    Returns ``[(month, rows)]``. ``skip`` leaves out children the partition path
+    already handled.
     """
     oldest = (
         db.session.query(func.min(AuditLog.created))
-        .filter(AuditLog.action == action, AuditLog.created < cutoff)
+        .filter(AuditLog.action == action, AuditLog.created < cutoff, _outside(skip))
         .scalar()
     )
     if oldest is None:
@@ -175,10 +275,10 @@ def _expired_months(action, cutoff, batch_size, dry_run):
     month = _month_floor(oldest)
     while month < cutoff:
         following = _next_month(month)
-        if dry_run:
-            rows = _count_range(action, month, following)
+        if log is None:
+            rows = _count_range(action, month, following, skip)
         else:
-            rows = _delete_range(action, month, following, batch_size)
+            rows = _delete_range(action, month, following, batch_size, log, skip)
         if rows:
             per_month.append((month, rows))
         month = following
@@ -186,12 +286,7 @@ def _expired_months(action, cutoff, batch_size, dry_run):
 
 
 def _is_partitioned():
-    """Whether ``audit_logs_metadata`` is a PostgreSQL partitioned table.
-
-    Only the retention task probes this; the model and service stay unaware that
-    an operator may have partitioned the table. A partitioned parent carries the
-    ``p`` relkind in the catalog, where a plain table carries ``r``.
-    """
+    """Whether ``audit_logs_metadata`` is partitioned; the model stays unaware."""
     if db.engine.name != "postgresql":
         return False
     relkind = db.session.execute(
@@ -205,126 +300,111 @@ def _is_partitioned():
     return relkind == "p"
 
 
-def _partition_of_month(month, following):
-    """Return the child partition holding the ``[month, following)`` rows.
+def _cold_partitions(hot_start):
+    """Return ``(oid, name)`` of children whose upper bound is before ``hot_start``.
 
-    The child is found from the table OID of any row in the month rather than by
-    parsing partition bounds, so the task stays agnostic to the partition key: it
-    works whether the operator ranged the partitions on ``created`` or on a
-    time-ordered UUIDv7 id. Only cold months with rows reach here, so a row always
-    exists to read the OID from.
+    New rows never land there, so rewriting them does not block writes. Only
+    ``RANGE (created)`` and ``RANGE (id)`` (UUIDv7) are understood; anything else
+    goes through the batched path.
     """
-    return db.session.execute(
-        text(
-            f"SELECT tableoid::regclass::text FROM {AuditLog.__tablename__} "
-            "WHERE created >= :start AND created < :end LIMIT 1"
-        ),
-        {"start": month, "end": following},
+    key = db.session.execute(
+        text("SELECT pg_get_partkeydef(CAST(:t AS regclass))"),
+        {"t": AuditLog.__tablename__},
     ).scalar()
+    if key == "RANGE (created)":
+        cast, limit = "timestamptz", hot_start.replace(tzinfo=timezone.utc)
+    elif key == "RANGE (id)":
+        ms = int(hot_start.replace(tzinfo=timezone.utc).timestamp() * 1000)
+        cast, limit = "uuid", uuid.UUID(int=ms << 80)
+    else:
+        return []
+    rows = db.session.execute(
+        text(
+            "SELECT oid, relname FROM ("
+            " SELECT c.oid, c.relname, (regexp_match("
+            "  pg_get_expr(c.relpartbound, c.oid), 'TO \\(''([^'']+)''\\)'))[1] AS upper"
+            " FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid"
+            " WHERE i.inhparent = CAST(:t AS regclass)) b "
+            f"WHERE CAST(upper AS {cast}) <= :limit ORDER BY relname"
+        ),
+        {"t": AuditLog.__tablename__, "limit": limit},
+    ).fetchall()
+    return [(oid, name) for oid, name in rows]
 
 
-def _rewrite_partition(partition, expired_actions):
-    """Shrink a cold partition to its survivors inside one transaction.
+def _purge_partition(name, finite_cutoffs, log):
+    """Truncate one cold child, keeping its kept rows; return expired counts.
 
-    Survivors are copied to a temporary table, the child partition is truncated,
-    and the survivors are reinserted, so only survivors reach the write-ahead log
-    and the ``ACCESS EXCLUSIVE`` lock stays scoped to this one cold child, never
-    the hot current month. Survivors keep their ids, so the reinserted rows route
-    back into the same partition's range.
+    Kept rows go through a temp table so only they reach the WAL, all in one
+    transaction with the run log. Without a ``log`` (dry run) nothing changes.
     """
-    survivors = text(
-        f"CREATE TEMP TABLE _audit_survivors AS "
-        f"SELECT * FROM {partition} WHERE action NOT IN :actions"
-    ).bindparams(bindparam("actions", expanding=True))
-    db.session.execute(text("DROP TABLE IF EXISTS _audit_survivors"))
-    db.session.execute(survivors, {"actions": expired_actions})
-    db.session.execute(text(f"TRUNCATE TABLE {partition}"))
-    db.session.execute(text(f"INSERT INTO {partition} SELECT * FROM _audit_survivors"))
-    db.session.execute(text("DROP TABLE _audit_survivors"))
+    child = table(name, column("id"), column("action"), column("created"))
+    expired = _expired_clause(finite_cutoffs, child)
+    month = func.date_trunc("month", func.timezone("UTC", child.c.created))
+    counts = [
+        (action, _naive_utc(m), rows)
+        for action, m, rows in db.session.execute(
+            select(child.c.action, month, func.count())
+            .where(expired)
+            .group_by(child.c.action, month)
+        )
+    ]
+    if not counts or log is None:
+        return counts
+
+    runs = [(log.start(action, m), rows) for action, m, rows in counts]
+    # Catalog names are not SQL-safe as-is (case, spaces), so quote before splicing.
+    quoted = db.engine.dialect.identifier_preparer.quote(name)
+    has_kept = db.session.execute(
+        select(select(child.c.id).where(not_(expired)).exists())
+    ).scalar()
+    if has_kept:
+        db.session.execute(text("DROP TABLE IF EXISTS _audit_kept"))
+        kept_rows = (
+            select(literal_column("*"))
+            .select_from(child)
+            .where(not_(expired))
+            .compile(db.engine)
+        )
+        db.session.connection().exec_driver_sql(
+            f"CREATE TEMP TABLE _audit_kept AS {kept_rows}", kept_rows.params
+        )
+        db.session.execute(text(f"TRUNCATE TABLE {quoted}"))
+        db.session.execute(text(f"INSERT INTO {quoted} SELECT * FROM _audit_kept"))
+        db.session.execute(text("DROP TABLE _audit_kept"))
+    else:
+        db.session.execute(text(f"TRUNCATE TABLE {quoted}"))
+    for run, rows in runs:
+        run.rows_deleted += rows
+        run.status = "success"
+    db.session.commit()
+    return counts
 
 
-def _delete_partitions(finite_cutoffs, dry_run):
-    """Delete expired events from a partitioned table, one cold child at a time.
+def _delete_partitions(finite_cutoffs, now, batch_size, log):
+    """Rewrite cold children whole, then batch-delete what is left elsewhere.
 
-    Within a cold month a row is expired exactly when its action's cutoff is later
-    than the month, so expiry is decided per action for the whole partition without
-    scanning rows. A partition whose every row is expired is truncated as a
-    metadata operation; one that still holds survivors is rewritten down to them.
-    The current (hot) month never appears, because month-aligned cutoffs leave no
-    expired rows there. Returns the same ``{action: [(month, rows)]}`` breakdown as
-    the batched fallback, so the run log and report are identical across profiles.
+    Returns ``[(action, month, rows)]``.
     """
-    expired = _expired_clause(finite_cutoffs)
-    months = sorted(
-        {
-            _month_floor(_naive_utc(created))
-            for (created,) in db.session.query(AuditLog.created).filter(expired).all()
-        }
-    )
-
-    per_action = {}
-    for month in months:
-        following = _next_month(month)
-        expired_actions = [a for a, cutoff in finite_cutoffs.items() if month < cutoff]
-        counts = (
-            db.session.query(AuditLog.action, func.count(AuditLog.id))
-            .filter(
-                AuditLog.created >= month,
-                AuditLog.created < following,
-                AuditLog.action.in_(expired_actions),
-            )
-            .group_by(AuditLog.action)
-            .all()
-        )
-        for action, rows in counts:
-            per_action.setdefault(action, []).append((month, rows))
-
-        if dry_run:
-            continue
-
-        survivors = (
-            db.session.query(func.count(AuditLog.id))
-            .filter(
-                AuditLog.created >= month,
-                AuditLog.created < following,
-                AuditLog.action.notin_(expired_actions),
-            )
-            .scalar()
-        )
-        partition = _partition_of_month(month, following)
-        if survivors:
-            _rewrite_partition(partition, expired_actions)
-        else:
-            db.session.execute(text(f"TRUNCATE TABLE {partition}"))
-        db.session.commit()
-    return per_action
+    cold = _cold_partitions(_month_floor(now))
+    found = []
+    for _, name in cold:
+        found += _purge_partition(name, finite_cutoffs, log)
+    skip = [oid for oid, _ in cold]
+    for action, cutoff in finite_cutoffs.items():
+        for month, rows in _expired_months(action, cutoff, batch_size, log, skip):
+            found.append((action, month, rows))
+    return found
 
 
 @shared_task(ignore_result=True)
 def delete_expired_audit_logs(dry_run=False):
-    """Delete expired audit log events from PostgreSQL.
+    """Delete expired audit log events from OpenSearch, then PostgreSQL.
 
-    For every action present in the table the resolver decides whether the action
-    is kept forever or yields a whole-month cutoff. Events older than the cutoff
-    are removed; kept-forever and not-yet-expired events stay. Where an operator
-    has partitioned the table by month the task drops or rewrites whole cold
-    partitions, otherwise it deletes in bounded batches; both reach the same end
-    state. A single-run lock prevents overlapping runs, and the run is idempotent
-    because a second pass finds nothing left past the cutoff.
-
-    With ``dry_run`` the task counts what it would remove and reports it without
-    deleting any row or writing a run log entry, so an operator can validate a
-    policy change before enforcing it. The dry run reads the same months a real run
-    would, so its counts match what the next enforced run deletes.
-
-    Returns ``None`` when another run holds the lock. An enforced run returns a
-    mapping of action id to the total rows it deleted. A dry run returns a mapping
-    of action id to a per-month mapping of deleted month to the rows a real run
-    would delete.
-
-    Expired events are deleted from OpenSearch before PostgreSQL: a crash between the two leaves search
-    showing fewer events than the authoritative store, never more, and a later run
-    heals the drift from PostgreSQL.
+    OpenSearch goes first so search never lists an event PostgreSQL lacks; each
+    store finds its own leftovers, so the next run finishes a crashed one.
+    Returns ``None`` if locked, ``{action: {month: rows}}`` for a dry run (counts
+    only, PostgreSQL only), else ``{action: rows_deleted}``.
     """
     lock = CachedMutex(LOCK_ID)
     try:
@@ -344,45 +424,33 @@ def delete_expired_audit_logs(dry_run=False):
             for action in actions
             if not policy.is_kept_forever(action)
         }
-
-        if not dry_run and finite_cutoffs:
-            _delete_from_opensearch(finite_cutoffs)
-
-        # The two profiles share retention semantics and differ only in how rows
-        # leave PostgreSQL: whole-partition operations where an operator has
-        # partitioned the table, batched DELETEs otherwise.
         if not finite_cutoffs:
-            per_action = {}
-        elif _is_partitioned():
-            per_action = _delete_partitions(finite_cutoffs, dry_run)
-        else:
-            per_action = {
-                action: _expired_months(action, cutoff, batch_size, dry_run)
-                for action, cutoff in finite_cutoffs.items()
-            }
+            return {}
+
+        log = None if dry_run else _RunLog(policy, now)
+        try:
+            if log is not None:
+                _delete_from_opensearch(finite_cutoffs, now)
+            if _is_partitioned():
+                found = _delete_partitions(finite_cutoffs, now, batch_size, log)
+            else:
+                found = [
+                    (action, month, rows)
+                    for action, cutoff in finite_cutoffs.items()
+                    for month, rows in _expired_months(action, cutoff, batch_size, log)
+                ]
+        except Exception:
+            if log is not None:
+                log.fail()
+            raise
 
         report = {}
-        for action, per_month in per_action.items():
-            if not per_month:
-                continue
+        for action, month, rows in found:
             if dry_run:
-                report[action] = {month.date(): rows for month, rows in per_month}
-                continue
-            retention_days = policy.period(action).days
-            for month, deleted in per_month:
-                db.session.add(
-                    RetentionRun(
-                        run_at=now,
-                        action=action,
-                        retention_days=retention_days,
-                        month=month.date(),
-                        rows_deleted=deleted,
-                        status="success",
-                    )
-                )
-            report[action] = sum(deleted for _, deleted in per_month)
-        if not dry_run:
-            db.session.commit()
+                per_month = report.setdefault(action, {})
+                per_month[month.date()] = per_month.get(month.date(), 0) + rows
+            else:
+                report[action] = report.get(action, 0) + rows
         return report
     finally:
         lock.release()

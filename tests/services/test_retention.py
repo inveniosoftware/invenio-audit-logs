@@ -9,6 +9,8 @@ import pytest
 from invenio_access.permissions import system_identity
 from invenio_cache.lock import CachedMutex
 from invenio_db import db
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from invenio_audit_logs import KEEP_FOREVER
 from invenio_audit_logs.records.models import AuditLog, RetentionRun
@@ -22,25 +24,25 @@ UTC = timezone.utc
 @pytest.mark.parametrize(
     "action, periods, default, expected",
     [
-        # Explicit per-action period: 60 days -> two whole months.
+        # Explicit per-action period.
         (
             "user.login",
-            {"user.login": timedelta(days=60)},
-            timedelta(days=395),
+            {"user.login": 2},
+            13,
             datetime(2026, 7, 1),
         ),
-        # Default fallback: 395 days -> thirteen whole months.
+        # Default fallback.
         (
             "record.publish",
             {},
-            timedelta(days=395),
+            13,
             datetime(2025, 8, 1),
         ),
         # Kept forever: no cutoff.
         (
             "user.block",
             {"user.block": KEEP_FOREVER},
-            timedelta(days=395),
+            13,
             None,
         ),
     ],
@@ -55,22 +57,22 @@ def test_resolver_cutoff(action, periods, default, expected):
     "now, period, expected",
     [
         # Crossing a year boundary backwards.
-        (datetime(2026, 1, 10), timedelta(days=60), datetime(2025, 11, 1)),
+        (datetime(2026, 1, 10), 2, datetime(2025, 11, 1)),
         # End-of-month reference still snaps to the first of the month.
-        (datetime(2026, 3, 31, 23, 59), timedelta(days=90), datetime(2025, 12, 1)),
+        (datetime(2026, 3, 31, 23, 59), 3, datetime(2025, 12, 1)),
         # One month back from December.
-        (datetime(2026, 12, 1), timedelta(days=30), datetime(2026, 11, 1)),
+        (datetime(2026, 12, 1), 1, datetime(2026, 11, 1)),
     ],
 )
 def test_resolver_month_boundary(now, period, expected):
     """The cutoff lands on a calendar-month boundary across year wraps."""
-    policy = RetentionPolicy({"action": period}, timedelta(days=395))
+    policy = RetentionPolicy({"action": period}, 13)
     assert policy.cutoff("action", now) == expected
 
 
 def test_resolver_keep_forever_flag():
     """is_kept_forever distinguishes the sentinel from a finite period."""
-    policy = RetentionPolicy({"user.block": KEEP_FOREVER}, timedelta(days=395))
+    policy = RetentionPolicy({"user.block": KEEP_FOREVER}, 13)
     assert policy.is_kept_forever("user.block") is True
     assert policy.is_kept_forever("user.login") is False
 
@@ -103,10 +105,10 @@ def retention_config(set_app_config_fn_scoped):
     set_app_config_fn_scoped(
         {
             "AUDIT_LOGS_RETENTION": {
-                "user.login": timedelta(days=60),
+                "user.login": 2,
                 "user.block": KEEP_FOREVER,
             },
-            "AUDIT_LOGS_RETENTION_DEFAULT": timedelta(days=395),
+            "AUDIT_LOGS_RETENTION_DEFAULT": 13,
         }
     )
 
@@ -152,15 +154,15 @@ def test_deletes_only_expired(app, seeded_events):
 
 
 def test_delete_is_idempotent(app, seeded_events):
-    """A second run deletes nothing and leaves the survivors untouched."""
+    """A second run deletes nothing and leaves the kept events untouched."""
     with app.app_context():
         delete_expired_audit_logs()
-        survivors = _remaining_ids()
+        remaining = _remaining_ids()
 
         deleted = delete_expired_audit_logs()
 
         assert deleted == {}
-        assert _remaining_ids() == survivors
+        assert _remaining_ids() == remaining
 
 
 def test_delete_respects_single_run_lock(app, seeded_events):
@@ -201,14 +203,14 @@ def test_run_log_records_each_deleted_month(app, seeded_events):
         login = by_action["user.login"]
         assert login.month == _months_before(month_start, 5).date()
         assert login.rows_deleted == 1
-        assert login.retention_days == 60
+        assert login.retention_months == 2
         assert login.status == "success"
         assert isinstance(login.run_at, datetime)
 
         publish = by_action["record.publish"]
         assert publish.month == _months_before(month_start, 20).date()
         assert publish.rows_deleted == 1
-        assert publish.retention_days == 395
+        assert publish.retention_months == 13
         assert publish.status == "success"
 
 
@@ -232,13 +234,50 @@ def test_run_log_one_entry_per_month_per_action(app, db, retention_config):
         }
 
 
+def test_run_log_marks_failed_month(app, db, retention_config):
+    """A month whose delete fails is logged ``failed``; earlier months stay logged.
+
+    A foreign key from another table blocks the delete of one row, the way an
+    external reference would in a real instance.
+    """
+    if db.engine.name != "postgresql":
+        pytest.skip("Uses a PostgreSQL foreign key to make the delete fail")
+    with app.app_context():
+        now = datetime.now(UTC).replace(tzinfo=None)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        _insert("user.login", _months_before(month_start, 6))
+        blocked = _insert("user.login", _months_before(month_start, 5))
+        # Unlogged like the test schema; a logged table cannot reference it.
+        db.session.execute(
+            text(
+                "CREATE UNLOGGED TABLE audit_ref "
+                "(id uuid REFERENCES audit_logs_metadata(id))"
+            )
+        )
+        db.session.execute(text("INSERT INTO audit_ref VALUES (:id)"), {"id": blocked})
+        db.session.commit()
+        try:
+            with pytest.raises(IntegrityError):
+                delete_expired_audit_logs()
+
+            assert {(run.month, run.rows_deleted, run.status) for run in _runs()} == {
+                (_months_before(month_start, 6).date(), 1, "success"),
+                (_months_before(month_start, 5).date(), 0, "failed"),
+            }
+            assert _remaining_ids() == {blocked}
+        finally:
+            db.session.rollback()
+            db.session.execute(text("DROP TABLE audit_ref"))
+            db.session.commit()
+
+
 def test_run_log_holds_no_event_content():
     """The run log table carries counts and status only, no event payload."""
     assert set(RetentionRun.__table__.columns.keys()) == {
         "id",
         "run_at",
         "action",
-        "retention_days",
+        "retention_months",
         "month",
         "rows_deleted",
         "status",
@@ -246,7 +285,7 @@ def test_run_log_holds_no_event_content():
 
 
 def test_run_log_persists_across_runs(app, seeded_events):
-    """Entries survive the deletion and a later no-op run, proving enforcement."""
+    """Entries remain after the deletion and a later no-op run, proving enforcement."""
     with app.app_context():
         delete_expired_audit_logs()
         first = {(run.action, run.month, run.rows_deleted) for run in _runs()}
@@ -324,7 +363,7 @@ def test_dry_run_leaves_opensearch_searchable(app, service, resource_data):
             {AuditLog.created: expired, AuditLog.updated: expired}
         )
         db.session.commit()
-        service.record_cls.index.refresh()
+        service.indexer.refresh()
 
         report = delete_expired_audit_logs(dry_run=True)
         assert report == {"draft.create": {expired.date(): 1}}
