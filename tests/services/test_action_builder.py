@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 """Test audit log builder."""
 
-import pytest
 from flask import g
 from flask_login import login_user
 from invenio_access.permissions import system_identity
@@ -38,7 +37,7 @@ def test_audit_log_builder(app, client_with_login, current_user, db, service):
     assert result["resource"]["type"] == "record"
     assert result["user"]["id"] == "1"
 
-    service.record_cls.index.refresh()
+    service.indexer.refresh()
 
     search_result = service.search(
         identity=system_identity,
@@ -83,7 +82,7 @@ def test_audit_log_builder_with_metadata(
         "created": "2026-01-01T12:00:00+00:00",
     }
 
-    service.record_cls.index.refresh()
+    service.indexer.refresh()
 
     # Search by nested fields
     search_result = service.search(

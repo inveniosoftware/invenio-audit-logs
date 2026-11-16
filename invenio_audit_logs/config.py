@@ -5,8 +5,6 @@
 
 from invenio_records_resources.services.records.facets import TermsFacet
 
-from .proxies import current_audit_logs_actions_registry
-
 AUDIT_LOGS_SEARCH = {
     "facets": ["resource", "action_name"],
     "sort": [
@@ -54,3 +52,29 @@ To find all the available actions, check the entry points in the `invenio_audit_
 >>> [ep.name for ep in entry_points(group="invenio_audit_logs.actions")]
 ```
 """
+
+AUDIT_LOGS_RETENTION_DEFAULT = 13
+"""Retention in months for any action without an explicit entry below.
+
+Finite on purpose: a new or unconfigured action is kept for this period rather
+than forever by oversight. 13 months is a common security-log default. An event
+is deleted once its calendar month is this many months before the current one, so
+it is kept at least this many months and at most one month more.
+"""
+
+AUDIT_LOGS_RETENTION = {}
+"""Per-action retention periods, keyed on the action id.
+
+Each value is a number of months or the ``KEEP_FOREVER`` sentinel. Keeping an
+action forever is the deliberate exception, e.g.::
+
+    from invenio_audit_logs import KEEP_FOREVER
+
+    AUDIT_LOGS_RETENTION = {
+        "user.login": 2,
+        "user.block": KEEP_FOREVER,
+    }
+"""
+
+AUDIT_LOGS_RETENTION_BATCH_SIZE = 1000
+"""Rows deleted per transaction when deleting expired events from PostgreSQL."""

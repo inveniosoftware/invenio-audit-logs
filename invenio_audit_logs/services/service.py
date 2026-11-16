@@ -22,6 +22,16 @@ from .uow import AuditRecordCommitOp
 class AuditLogService(RecordService):
     """Audit log service layer."""
 
+    def record_to_index(self, record):
+        """Route each event to a monthly index derived from its ``created``.
+
+        The plain ``auditlog*`` template auto-creates ``auditlog-YYYY-MM`` on first
+        write and joins it to the ``auditlog`` read alias, so there is no write
+        alias and no rollover job. Keying on the timestamp means ``rebuild_index``
+        puts each event back in the month it belongs to.
+        """
+        return f"auditlog-{record.created:%Y-%m}"
+
     def _get_schema(self, action):
         """Wrap schema for the action."""
         marshmallow_schema = current_audit_logs_schema_cache.get(

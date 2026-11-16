@@ -51,7 +51,7 @@ def test_audit_log_create(
     assert expected_links == result["links"]
 
     # Search
-    service.record_cls.index.refresh()
+    service.indexer.refresh()
     search_result = service.search(
         identity=system_identity,
         params={"q": "resource.id: abcd-1234 AND action: draft.create"},
@@ -101,7 +101,7 @@ def test_audit_log_create_system_identity(app, service, system_user, resource_da
     }
     assert result["user"] == system_user
 
-    service.record_cls.index.refresh()
+    service.indexer.refresh()
 
     search_result = service.search(
         identity=system_identity,
