@@ -17,6 +17,7 @@ import pytest
 from invenio_access.permissions import system_identity
 from invenio_db import db
 from invenio_search import current_search_client
+from invenio_search.utils import build_alias_name
 from sqlalchemy import text
 
 from invenio_audit_logs.records.models import AuditLog
@@ -42,7 +43,9 @@ def _uuid7_floor(month_start):
 
 def _clear_audit_indices():
     """Delete the monthly ``auditlog`` indices so their documents don't reach other tests."""
-    current_search_client.indices.delete(index="auditlog*", ignore_unavailable=True)
+    current_search_client.indices.delete(
+        index=build_alias_name("auditlog*"), ignore_unavailable=True
+    )
 
 
 @pytest.fixture()
@@ -123,7 +126,7 @@ def test_search_with_partitioned_table(
 
     with app.test_request_context():
         service.create(identity=system_identity, data=data)
-        service.record_cls.index.refresh()
+        service.indexer.refresh()
 
         results = service.search(
             identity=system_identity,
