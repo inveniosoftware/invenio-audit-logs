@@ -1,11 +1,15 @@
 ..
-    SPDX-FileCopyrightText: 2025 CERN.
+    SPDX-FileCopyrightText: 2025-2026 CERN.
     SPDX-FileCopyrightText: 2025-2026 Graz University of Technology.
     SPDX-FileCopyrightText: 2026 TU Wien.
     SPDX-License-Identifier: MIT
 
 Changes
 =======
+
+Version v5.2.0 (released 2026-11-24
+
+- chore(setup): bump dependencies
 
 Version v5.1.0 (released 2026-11-24)
 
