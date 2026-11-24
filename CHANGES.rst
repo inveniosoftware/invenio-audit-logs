@@ -7,6 +7,10 @@
 Changes
 =======
 
+Version v5.1.0 (released 2026-11-24)
+
+- feat(search): filter audit logs by user_id
+
 Version v5.0.0 (released 2026-11-10)
 
 - chore(setup): bump dependencies
