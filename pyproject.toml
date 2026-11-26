@@ -7,7 +7,7 @@
 name = "invenio-audit-logs"
 description = "Module providing audit logging features for Invenio."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = "MIT"
 authors = [
   { name = "CERN", email = "info@inveniosoftware.org" },
